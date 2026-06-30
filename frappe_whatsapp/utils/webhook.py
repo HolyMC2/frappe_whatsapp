@@ -271,11 +271,14 @@ def post():
 			# inbound message; stamp it onto the row we just created (matched by message_id)
 			# so downstream marketing can join the ad to revenue. Runs for every message type,
 			# fail-open — a missing field or parse error must never break message ingestion.
-			# (ctwa_source_id / ctwa_clid are site custom fields; absent on a vanilla install,
-			# where the set_value simply no-ops under the try.)
+			# ctwa_source_id / ctwa_clid are SITE custom fields (added per-tenant by the
+			# doco_meta_catalog app), so guard on their presence first: a tenant without those
+			# columns would otherwise raise MariaDB 1054 here every CTWA inbound (caught below,
+			# but it would spam the Error Log), so skip cleanly when the columns are absent.
 			try:
 				referral = message.get("referral") or {}
-				if referral.get("source_id") or referral.get("ctwa_clid"):
+				if (referral.get("source_id") or referral.get("ctwa_clid")) \
+						and frappe.get_meta("WhatsApp Message").has_field("ctwa_source_id"):
 					frappe.db.set_value(
 						"WhatsApp Message",
 						{"message_id": message["id"]},
