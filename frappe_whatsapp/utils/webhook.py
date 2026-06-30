@@ -267,6 +267,27 @@ def post():
 					"whatsapp_account":whatsapp_account.name
 				}).insert(ignore_permissions=True)
 
+			# CTWA (Click-To-WhatsApp ad) attribution. Meta hangs the ad referral on the
+			# inbound message; stamp it onto the row we just created (matched by message_id)
+			# so downstream marketing can join the ad to revenue. Runs for every message type,
+			# fail-open — a missing field or parse error must never break message ingestion.
+			# (ctwa_source_id / ctwa_clid are site custom fields; absent on a vanilla install,
+			# where the set_value simply no-ops under the try.)
+			try:
+				referral = message.get("referral") or {}
+				if referral.get("source_id") or referral.get("ctwa_clid"):
+					frappe.db.set_value(
+						"WhatsApp Message",
+						{"message_id": message["id"]},
+						{
+							"ctwa_source_id": referral.get("source_id"),
+							"ctwa_clid": referral.get("ctwa_clid"),
+						},
+						update_modified=False,
+					)
+			except Exception:
+				frappe.log_error("CTWA referral capture failed", frappe.get_traceback())
+
 	else:
 		changes = None
 		try:
