@@ -340,6 +340,11 @@ class WhatsAppNotification(Document):
             }).insert(ignore_permissions=True)
 
 
+    def on_update(self):
+        """Bust the cached notification map so create/edit/enable-disable
+        take effect immediately (get_notifications_map serves from cache)."""
+        frappe.cache().delete_value("whatsapp_notification_map")
+
     def on_trash(self):
         """On delete remove from schedule."""
         frappe.cache().delete_value("whatsapp_notification_map")

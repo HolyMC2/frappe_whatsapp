@@ -73,9 +73,20 @@ def _send_whatsapp_notification(notification_name, doctype, docname, commit=Fals
 
 
 def get_notifications_map():
-    """Get mapping."""
+    """Get mapping (site-cached; busted on WhatsApp Notification save).
+
+    The `*` doc-event hook calls this on every lifecycle event of every doc, so
+    an uncached rebuild here runs a `tabWhatsApp Notification` query on every
+    write in the site (millions of calls). The cache is invalidated in
+    WhatsAppNotification.on_update/on_trash, so serving from cache is safe and
+    collapses those calls to one query per notification change.
+    """
     if frappe.flags.in_patch and not frappe.db.table_exists("WhatsApp Notification"):
         return {}
+
+    cached = frappe.cache().get_value("whatsapp_notification_map")
+    if cached is not None:
+        return cached
 
     notification_map = {}
     enabled_whatsapp_notifications = frappe.get_all(
