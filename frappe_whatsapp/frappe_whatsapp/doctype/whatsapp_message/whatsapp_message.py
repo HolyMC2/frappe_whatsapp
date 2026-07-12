@@ -458,16 +458,35 @@ class WhatsAppMessage(Document):
             )
         return send_as, path, mime, None
 
+    # Server-wide (MySQL GET_LOCK is server-scoped, not per-DB): at most ONE
+    # transcode per database host at a time, across every tenant — the host's
+    # CPU budget, not the site's.
+    TRANSCODE_LOCK_KEY = "wa_video_transcode"
+
     def _transcode_720p(self, path):
         """4K/NVR clip → 720p H.264/AAC mp4 (what the WhatsApp app itself does
-        before sending). None when ffmpeg is missing or the encode fails/times
-        out — callers degrade to the document path."""
+        before sending). None when the platform toggle is off, ffmpeg is
+        missing, another transcode is running, or the encode fails/times out —
+        callers degrade to the document path.
+
+        Platform-gated via site_config `wa_video_transcode` (bench set-config),
+        NOT a tenant-editable Single: transcoding burns host CPU, so on the
+        SaaS it's a plan feature the platform grants — a tenant must not be
+        able to self-enable it (can't-weaken posture, inverted).
+        """
         import os
         import shutil
         import subprocess
         import tempfile
 
+        if not frappe.conf.get("wa_video_transcode"):
+            return None
         if not shutil.which("ffmpeg"):
+            return None
+        # dispatch-runner lock idiom: non-blocking; a concurrent send degrades
+        # to a document instead of queueing behind another encode.
+        locked = frappe.db.sql("SELECT GET_LOCK(%s, 0)", self.TRANSCODE_LOCK_KEY)[0][0]
+        if not locked:
             return None
         fd, out = tempfile.mkstemp(suffix=".mp4")
         os.close(fd)
@@ -475,6 +494,9 @@ class WhatsAppMessage(Document):
             "ffmpeg", "-y", "-i", path,
             "-vf", "scale=-2:'min(720,ih)'",
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+            # cap encoder threads — x264 grabs every core by default and would
+            # starve gunicorn/MariaDB during the encode
+            "-threads", "2",
             "-c:a", "aac", "-b:a", "96k",
             "-movflags", "+faststart",
             out,
@@ -494,6 +516,8 @@ class WhatsAppMessage(Document):
                 message=frappe.get_traceback(),
             )
             return None
+        finally:
+            frappe.db.sql("SELECT RELEASE_LOCK(%s)", self.TRANSCODE_LOCK_KEY)
 
     def notify(self, data):
         """Notify."""
