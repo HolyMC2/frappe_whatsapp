@@ -74,7 +74,7 @@ class WhatsAppMessage(Document):
 
         if self.message_type != "Template":
             if self.attach and not self.attach.startswith("http"):
-                link = frappe.utils.get_url() + "/" + self.attach
+                link = frappe.utils.get_url() + self.attach if self.attach.startswith("/") else frappe.utils.get_url() + "/" + self.attach
             else:
                 link = self.attach
 
@@ -86,10 +86,23 @@ class WhatsAppMessage(Document):
             if self.is_reply and self.reply_to_message_id:
                 data["context"] = {"message_id": self.reply_to_message_id}
             if self.content_type in ["document", "image", "video"]:
-                data[self.content_type.lower()] = {
-                    "link": link,
-                    "caption": self.message,
-                }
+                # SITE-HOSTED media goes up as a Meta media object and is sent
+                # by id — Meta's fetchers can't reliably pull our links through
+                # Cloudflare (videos were accepted then async-failed with the
+                # file itself passing Meta's upload validation, doco
+                # 2026-07-11). External URLs (signed B2 etc.) keep the link
+                # path; upload failure falls back to the old link send.
+                media_id = self._upload_local_media()
+                if media_id:
+                    data[self.content_type.lower()] = {
+                        "id": media_id,
+                        "caption": self.message,
+                    }
+                else:
+                    data[self.content_type.lower()] = {
+                        "link": link,
+                        "caption": self.message,
+                    }
             elif self.content_type == "reaction":
                 data["reaction"] = {
                     "message_id": self.reply_to_message_id,
@@ -337,6 +350,61 @@ class WhatsAppMessage(Document):
                 data['template']['components'].extend(button_parameters)
 
         self.notify(data)
+
+    def _upload_local_media(self):
+        """Upload a SITE-HOSTED attachment to Meta's media endpoint → media id.
+
+        Returns None for external URLs (B2 signed links etc. keep the link
+        send) and on any failure (caller falls back to the link send). Handles
+        public /files, private /private/files, and absolute same-site URLs.
+        """
+        import mimetypes
+        import os
+
+        import requests
+
+        attach = self.attach or ""
+        if not attach:
+            return None
+        site_url = frappe.utils.get_url()
+        if attach.startswith(site_url):
+            attach = attach[len(site_url):]
+        if attach.startswith("http"):
+            return None  # genuinely external — keep the link path
+
+        rel = attach.lstrip("/")
+        if rel.startswith("private/files/"):
+            path = frappe.get_site_path("private", "files", rel[len("private/files/"):])
+        elif rel.startswith("files/"):
+            path = frappe.get_site_path("public", "files", rel[len("files/"):])
+        else:
+            return None
+        if not os.path.exists(path):
+            return None
+
+        mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        try:
+            account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
+            token = account.get_password("token")
+            with open(path, "rb") as fh:
+                r = requests.post(
+                    f"{account.url}/{account.version}/{account.phone_id}/media",
+                    headers={"authorization": f"Bearer {token}"},
+                    files={"file": (os.path.basename(path), fh, mime)},
+                    data={"messaging_product": "whatsapp", "type": mime},
+                    timeout=120,
+                )
+            r.raise_for_status()
+            return r.json().get("id")
+        except Exception:
+            # never leak the token (raise_for_status text is ours to control
+            # here — the URL carries no token) and never block the send: the
+            # caller falls back to the legacy link payload.
+            frappe.log_error(
+                title="WhatsApp media upload failed — falling back to link send",
+                message=frappe.get_traceback(),
+            )
+            return None
 
     def notify(self, data):
         """Notify."""

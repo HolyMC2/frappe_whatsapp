@@ -9,6 +9,7 @@
   "label",
   "type",
   "status",
+  "failure_reason",
   "to",
   "from",
   "profile_name",
@@ -65,6 +66,14 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Status",
+   "read_only": 1
+  },
+  {
+   "depends_on": "eval:doc.status=='failed'",
+   "description": "Meta's async failure detail from the status webhook (code · title · message).",
+   "fieldname": "failure_reason",
+   "fieldtype": "Small Text",
+   "label": "Failure Reason",
    "read_only": 1
   },
   {

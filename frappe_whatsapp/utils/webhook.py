@@ -319,13 +319,28 @@ def update_template_status(data):
 
 def update_message_status(data):
 	"""Update message status."""
-	id = data['statuses'][0]['id']
-	status = data['statuses'][0]['status']
-	conversation = data['statuses'][0].get('conversation', {}).get('id')
+	entry = data['statuses'][0]
+	id = entry['id']
+	status = entry['status']
+	conversation = entry.get('conversation', {}).get('id')
 	name = frappe.db.get_value("WhatsApp Message", filters={"message_id": id})
+	if not name:
+		# A status callback for a message this DB never stored (console/API
+		# sends, other integrations on the same number). Crashing here 500s
+		# the webhook and makes Meta retry-storm — drop it quietly.
+		return
 
 	doc = frappe.get_doc("WhatsApp Message", name)
 	doc.status = status
 	if conversation:
 		doc.conversation_id = conversation
+	# Meta explains async failures (media fetch, re-engagement window, policy)
+	# ONLY here — dropping errors[] made every failed send undiagnosable
+	# (doco 2026-07-11: video sends failed with no trace).
+	if status == "failed" and entry.get("errors"):
+		bits = []
+		for err in entry["errors"][:3]:
+			detail = (err.get("error_data") or {}).get("details") or err.get("message") or ""
+			bits.append(f"{err.get('code', '?')} · {err.get('title', '')} · {detail}"[:220])
+		doc.failure_reason = "\n".join(bits)
 	doc.save(ignore_permissions=True)
