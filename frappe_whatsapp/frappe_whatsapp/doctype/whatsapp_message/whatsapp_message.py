@@ -90,14 +90,20 @@ class WhatsAppMessage(Document):
                 # by id — Meta's fetchers can't reliably pull our links through
                 # Cloudflare (videos were accepted then async-failed with the
                 # file itself passing Meta's upload validation, doco
-                # 2026-07-11). External URLs (signed B2 etc.) keep the link
-                # path; upload failure falls back to the old link send.
-                media_id = self._upload_local_media()
+                # 2026-07-11). Oversized media mirrors the phone app: videos
+                # >16MB transcode to 720p when ffmpeg exists; still-too-big (or
+                # images >5MB) fall back to a document send (100MB cap).
+                # External URLs (signed B2 etc.) keep the link path; upload
+                # failure falls back to the old link send.
+                media_id, sent_as = self._upload_local_media()
                 if media_id:
-                    data[self.content_type.lower()] = {
-                        "id": media_id,
-                        "caption": self.message,
-                    }
+                    if sent_as != self.content_type:
+                        self.content_type = sent_as
+                        data["type"] = sent_as
+                    payload = {"id": media_id, "caption": self.message}
+                    if sent_as == "document" and self.attach:
+                        payload["filename"] = self.attach.rsplit("/", 1)[-1]
+                    data[sent_as] = payload
                 else:
                     data[self.content_type.lower()] = {
                         "link": link,
@@ -351,10 +357,23 @@ class WhatsAppMessage(Document):
 
         self.notify(data)
 
-    def _upload_local_media(self):
-        """Upload a SITE-HOSTED attachment to Meta's media endpoint → media id.
+    # Cloud API hard caps (Meta rejects bigger uploads outright).
+    MAX_VIDEO_BYTES = 16 * 1024 * 1024
+    MAX_IMAGE_BYTES = 5 * 1024 * 1024
+    MAX_DOCUMENT_BYTES = 100 * 1024 * 1024
+    # In-request transcode budget: bigger sources would blow the web timeout —
+    # they go straight to the document escape hatch.
+    TRANSCODE_SOURCE_CAP = 100 * 1024 * 1024
+    TRANSCODE_TIMEOUT_SECS = 90
 
-        Returns None for external URLs (B2 signed links etc. keep the link
+    def _upload_local_media(self):
+        """Upload a SITE-HOSTED attachment to Meta's media endpoint.
+
+        Returns (media_id, send_type). send_type may differ from
+        self.content_type: oversized media degrades the way the phone app
+        does — video >16MB transcodes to 720p H.264 when ffmpeg exists, and
+        anything that still exceeds its cap ships as a document (≤100MB).
+        (None, content_type) for external URLs (B2 signed links keep the link
         send) and on any failure (caller falls back to the link send). Handles
         public /files, private /private/files, and absolute same-site URLs.
         """
@@ -363,14 +382,15 @@ class WhatsAppMessage(Document):
 
         import requests
 
+        send_as = self.content_type
         attach = self.attach or ""
         if not attach:
-            return None
+            return None, send_as
         site_url = frappe.utils.get_url()
         if attach.startswith(site_url):
             attach = attach[len(site_url):]
         if attach.startswith("http"):
-            return None  # genuinely external — keep the link path
+            return None, send_as  # genuinely external — keep the link path
 
         rel = attach.lstrip("/")
         if rel.startswith("private/files/"):
@@ -378,12 +398,14 @@ class WhatsAppMessage(Document):
         elif rel.startswith("files/"):
             path = frappe.get_site_path("public", "files", rel[len("files/"):])
         else:
-            return None
+            return None, send_as
         if not os.path.exists(path):
-            return None
+            return None, send_as
 
         mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        cleanup = None
         try:
+            send_as, path, mime, cleanup = self._fit_media_to_caps(send_as, path, mime)
             account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
             token = account.get_password("token")
             with open(path, "rb") as fh:
@@ -395,13 +417,80 @@ class WhatsAppMessage(Document):
                     timeout=120,
                 )
             r.raise_for_status()
-            return r.json().get("id")
+            return r.json().get("id"), send_as
+        except frappe.ValidationError:
+            raise  # over the 100MB document cap — surface it, don't "fall back"
         except Exception:
             # never leak the token (raise_for_status text is ours to control
             # here — the URL carries no token) and never block the send: the
             # caller falls back to the legacy link payload.
             frappe.log_error(
                 title="WhatsApp media upload failed — falling back to link send",
+                message=frappe.get_traceback(),
+            )
+            return None, self.content_type
+        finally:
+            if cleanup and os.path.exists(cleanup):
+                os.unlink(cleanup)
+
+    def _fit_media_to_caps(self, send_as, path, mime):
+        """Mirror the phone app: compress to fit the cap, document as the
+        escape hatch. Returns (send_type, path, mime, temp_to_cleanup)."""
+        import os
+
+        size = os.path.getsize(path)
+        if send_as == "video" and size > self.MAX_VIDEO_BYTES:
+            if size <= self.TRANSCODE_SOURCE_CAP:
+                out = self._transcode_720p(path)
+                if out and os.path.getsize(out) <= self.MAX_VIDEO_BYTES:
+                    return "video", out, "video/mp4", out
+                if out:
+                    os.unlink(out)  # transcoded but still over the cap
+            send_as = "document"
+        elif send_as == "image" and size > self.MAX_IMAGE_BYTES:
+            send_as = "document"
+
+        if send_as == "document" and size > self.MAX_DOCUMENT_BYTES:
+            frappe.throw(
+                _("El archivo pesa {0} MB — el máximo de WhatsApp es 100 MB incluso como documento.").format(
+                    round(size / (1024 * 1024))
+                )
+            )
+        return send_as, path, mime, None
+
+    def _transcode_720p(self, path):
+        """4K/NVR clip → 720p H.264/AAC mp4 (what the WhatsApp app itself does
+        before sending). None when ffmpeg is missing or the encode fails/times
+        out — callers degrade to the document path."""
+        import os
+        import shutil
+        import subprocess
+        import tempfile
+
+        if not shutil.which("ffmpeg"):
+            return None
+        fd, out = tempfile.mkstemp(suffix=".mp4")
+        os.close(fd)
+        cmd = [
+            "ffmpeg", "-y", "-i", path,
+            "-vf", "scale=-2:'min(720,ih)'",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
+            "-c:a", "aac", "-b:a", "96k",
+            "-movflags", "+faststart",
+            out,
+        ]
+        try:
+            subprocess.run(
+                cmd, check=True, capture_output=True, timeout=self.TRANSCODE_TIMEOUT_SECS
+            )
+            return out
+        except Exception:
+            try:
+                os.unlink(out)
+            except OSError:
+                pass
+            frappe.log_error(
+                title="WhatsApp video transcode failed — degrading to document send",
                 message=frappe.get_traceback(),
             )
             return None
