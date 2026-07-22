@@ -179,8 +179,15 @@ def get_whatsapp_account(phone_id=None, account_type='incoming'):
         account_name = frappe.db.get_value('WhatsApp Account', {'phone_id': phone_id}, 'name')
         if account_name:
             return frappe.get_doc("WhatsApp Account", account_name)
+        # A phone_id was supplied but matches NO configured account: never fall
+        # back to the default — on a multi-account site that cross-attributes
+        # the inbound (wrong account → wrong shop routing / branch visibility).
+        # The webhook drops unmatched inbounds via `if messages and not
+        # whatsapp_account: return`. Default selection stays for phone_id=None
+        # (outgoing / template paths).
+        return None
 
-    account_field_type = 'is_default_incoming' if account_type =='incoming' else 'is_default_outgoing' 
+    account_field_type = 'is_default_incoming' if account_type =='incoming' else 'is_default_outgoing'
     default_account_name = frappe.db.get_value('WhatsApp Account', {account_field_type: 1}, 'name')
     if default_account_name:
         return frappe.get_doc("WhatsApp Account", default_account_name)
@@ -188,7 +195,10 @@ def get_whatsapp_account(phone_id=None, account_type='incoming'):
     return None
 
 def format_number(number):
-    """Format number."""
+    """Format number. Strips a leading '+' only — this is NOT a trailing-10 /
+    MX 521-vs-52 normalizer, don't use it for number matching."""
+    if not number:
+        return number
     if number.startswith("+"):
         number = number[1 : len(number)]
 

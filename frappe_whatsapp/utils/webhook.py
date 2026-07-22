@@ -51,6 +51,9 @@ def post():
 		phone_id = data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("metadata", {}).get("phone_number_id")
 	except KeyError:
 		messages = data["entry"]["changes"][0]["value"].get("messages", [])
+	except IndexError:
+		# empty entry/changes array — nothing to ingest
+		pass
 	sender_profile_name = next(
 		(
 			contact.get("profile", {}).get("name")
@@ -193,55 +196,69 @@ def post():
 					"product_catalog_json": json.dumps(order_data)
 				}).insert(ignore_permissions=True)
 			elif message_type in ["image", "audio", "video", "document"]:
-				token = whatsapp_account.get_password("token")
-				url = f"{whatsapp_account.url}/{whatsapp_account.version}/"
+				# The message row is inserted FIRST and the media fetch is
+				# best-effort: a failed fetch used to skip the insert entirely
+				# (customer photo/voice-note vanished — webhook still 200'd so
+				# Meta never retried), and a raised error rolled back the whole
+				# batch into a Meta retry storm.
+				media = message.get(message_type) or {}
+				message_doc = frappe.get_doc({
+					"doctype": "WhatsApp Message",
+					"type": "Incoming",
+					"from": message['from'],
+					"message_id": message['id'],
+					"reply_to_message_id": reply_to_message_id,
+					"is_reply": is_reply,
+					"message": media.get("caption", ""),
+					"content_type" : message_type,
+					"profile_name":sender_profile_name,
+					"whatsapp_account":whatsapp_account.name
+				}).insert(ignore_permissions=True)
 
-				media_id = message[message_type]["id"]
-				headers = {
-					'Authorization': 'Bearer ' + token
-
-				}
-				response = requests.get(f'{url}{media_id}/', headers=headers)
-
-				if response.status_code == 200:
+				try:
+					token = whatsapp_account.get_password("token")
+					url = f"{whatsapp_account.url}/{whatsapp_account.version}/"
+					media_id = media["id"]
+					headers = {
+						'Authorization': 'Bearer ' + token
+					}
+					response = requests.get(f'{url}{media_id}/', headers=headers, timeout=(5, 30))
+					response.raise_for_status()
 					media_data = response.json()
-					media_url = media_data.get("url")
-					mime_type = media_data.get("mime_type")
-					file_extension = mime_type.split('/')[1]
+					media_url = media_data["url"]
+					mime_type = media_data.get("mime_type") or ""
+					file_extension = mime_type.split('/')[1] if "/" in mime_type else "bin"
 
-					media_response = requests.get(media_url, headers=headers)
-					if media_response.status_code == 200:
+					media_response = requests.get(media_url, headers=headers, timeout=(5, 60))
+					media_response.raise_for_status()
 
-						file_data = media_response.content
-						file_name = f"{frappe.generate_hash(length=10)}.{file_extension}"
+					file_data = media_response.content
+					file_name = f"{frappe.generate_hash(length=10)}.{file_extension}"
 
-						message_doc = frappe.get_doc({
-							"doctype": "WhatsApp Message",
-							"type": "Incoming",
-							"from": message['from'],
-							"message_id": message['id'],
-							"reply_to_message_id": reply_to_message_id,
-							"is_reply": is_reply,
-							"message": message[message_type].get("caption", ""),
-							"content_type" : message_type,
-							"profile_name":sender_profile_name,
-							"whatsapp_account":whatsapp_account.name
-						}).insert(ignore_permissions=True)
+					file = frappe.get_doc(
+						{
+							"doctype": "File",
+							"file_name": file_name,
+							"attached_to_doctype": "WhatsApp Message",
+							"attached_to_name": message_doc.name,
+							"content": file_data,
+							"attached_to_field": "attach"
+						}
+					).save(ignore_permissions=True)
 
-						file = frappe.get_doc(
-							{
-								"doctype": "File",
-								"file_name": file_name,
-								"attached_to_doctype": "WhatsApp Message",
-								"attached_to_name": message_doc.name,
-								"content": file_data,
-								"attached_to_field": "attach"
-							}
-						).save(ignore_permissions=True)
-
-
-						message_doc.attach = file.file_url
-						message_doc.save()
+					message_doc.attach = file.file_url
+					message_doc.save()
+				except Exception:
+					frappe.log_error(
+						title="WhatsApp inbound media fetch failed",
+						message=frappe.get_traceback(),
+					)
+					if not message_doc.message:
+						# db_set: `message` is a set-once field, a doc.save()
+						# here throws CannotChangeConstantError.
+						message_doc.db_set(
+							"message", "[media no recuperable]", update_modified=False
+						)
 			elif message_type == "button":
 				frappe.get_doc({
 					"doctype": "WhatsApp Message",
@@ -297,6 +314,9 @@ def post():
 			changes = data["entry"][0]["changes"][0]
 		except KeyError:
 			changes = data["entry"]["changes"][0]
+		except IndexError:
+			# empty entry/changes array — no status to update
+			return
 		update_status(changes)
 	return
 
