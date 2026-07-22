@@ -13,7 +13,14 @@ class WhatsAppAccount(Document):
 		self.there_must_be_only_one_default()
 
 	def there_must_be_only_one_default(self):
-		"""If current WhatsApp Account is default, un-default all other accounts."""
+		"""If current WhatsApp Account is default, un-default all other accounts.
+
+		db_set, NOT doc.save(): saving the old default re-enters ITS on_update →
+		this same exclusivity loop → it re-claims the flag and zeroes the NEW
+		account. When the old default held both flags the ping-pong ended with
+		NO default account at all (every outgoing send then throws "Please set
+		a default outgoing WhatsApp Account").
+		"""
 		for field in ("is_default_incoming", "is_default_outgoing"):
 			if not self.get(field):
 				continue
@@ -22,9 +29,7 @@ class WhatsAppAccount(Document):
 				if whatsapp_account.name == self.name:
 					continue
 
-				whatsapp_account = frappe.get_doc("WhatsApp Account", whatsapp_account.name)
-				whatsapp_account.set(field, 0)
-				whatsapp_account.save()
+				frappe.db.set_value("WhatsApp Account", whatsapp_account.name, field, 0)
 
 	@frappe.whitelist()
 	def subscribe_app(self):
