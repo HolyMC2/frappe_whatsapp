@@ -22,7 +22,6 @@ auto-reply can never reach live Meta with the broken lab token.
 from unittest.mock import MagicMock, patch
 
 import frappe
-import requests
 from frappe.tests import IntegrationTestCase
 
 # make_post_request is bound into the message doctype module — patch it there so
@@ -74,49 +73,6 @@ def _text_payload(phone_id, sender, msg_id, body="hola"):
 							"messages": [
 								{"from": sender, "id": msg_id, "type": "text", "text": {"body": body}}
 							],
-						}
-					}
-				]
-			}
-		]
-	}
-
-
-def _media_payload(phone_id, sender, msg_id, media_type="image", caption=""):
-	return {
-		"entry": [
-			{
-				"changes": [
-					{
-						"value": {
-							"metadata": {"phone_number_id": phone_id},
-							"contacts": [{"profile": {"name": "Conv WH Media"}}],
-							"messages": [
-								{
-									"from": sender,
-									"id": msg_id,
-									"type": media_type,
-									media_type: {"id": "MEDIA_" + msg_id, "caption": caption},
-								}
-							],
-						}
-					}
-				]
-			}
-		]
-	}
-
-
-def _multi_payload(phone_id, *messages):
-	return {
-		"entry": [
-			{
-				"changes": [
-					{
-						"value": {
-							"metadata": {"phone_number_id": phone_id},
-							"contacts": [{"profile": {"name": "Conv WH Batch"}}],
-							"messages": list(messages),
 						}
 					}
 				]
@@ -188,11 +144,24 @@ class TestWebhookRouting(IntegrationTestCase):
 		ma = frappe.get_doc("WhatsApp Message", {"message_id": "wamid.conv_wh_route_a"})
 		self.assertEqual(ma.whatsapp_account, self.acct_a)
 
-	def test_unknown_phone_id_creates_no_message(self):
+	def test_unknown_phone_id_creates_no_message_even_with_a_default(self):
+		"""Audit H2: an unmatched phone_id must NOT fall back to the default account
+		(that cross-attributes inbound to the wrong shop). Even with a default present,
+		the inbound is dropped."""
+		_account("Conv WH Default", "conv_wh_default_pid", "conv_wh_default_vt", incoming=1, outgoing=1)
 		self._post(_text_payload("phone_id_no_account", "5215551234599", "wamid.conv_wh_unknown"))
 		self.assertFalse(
 			frappe.db.exists("WhatsApp Message", {"message_id": "wamid.conv_wh_unknown"})
 		)
+
+	# --- malformed payloads (audit L1) ---
+	# (media-ingestion resilience, audit H1, lives in TestWebhookMedia below)
+
+	def test_empty_entry_arrays_do_not_500(self):
+		# Meta virtually always sends non-empty arrays, but an empty one must drop
+		# cleanly (IndexError), never 500 into a Meta retry.
+		self._post({"entry": []})
+		self._post({"entry": [{"changes": []}]})
 
 	# --- status callbacks ---
 
@@ -359,3 +328,38 @@ class TestAccountDefaultsExclusive(IntegrationTestCase):
 		d = _account("Conv Excl Out D", "conv_excl_out_d", "vt_d_out", outgoing=1)
 		self.assertEqual(frappe.db.get_value("WhatsApp Account", c, "is_default_outgoing"), 0)
 		self.assertEqual(frappe.db.get_value("WhatsApp Account", d, "is_default_outgoing"), 1)
+
+	def test_default_handover_from_both_flags_account_leaves_a_default(self):
+		"""Regression: un-defaulting the old default via doc.save() re-entered ITS
+		exclusivity hook, which re-claimed the flag and zeroed the NEW account —
+		when the old default held BOTH flags the ping-pong ended with NO default
+		at all (every outgoing send then threw). db_set fix keeps exactly one."""
+		old = _account("Conv Excl Both Old", "conv_excl_both_old", "vt_both_old", incoming=1, outgoing=1)
+		new = _account("Conv Excl Both New", "conv_excl_both_new", "vt_both_new", incoming=1, outgoing=1)
+		for field in ("is_default_incoming", "is_default_outgoing"):
+			self.assertEqual(frappe.db.get_value("WhatsApp Account", new, field), 1)
+			self.assertEqual(frappe.db.get_value("WhatsApp Account", old, field), 0)
+			holders = frappe.get_all("WhatsApp Account", filters={field: 1}, pluck="name")
+			self.assertEqual(holders, [new])
+
+
+class TestGetWhatsAppAccountResolution(IntegrationTestCase):
+	"""Audit H2 + L2 — the account resolver + format_number defensive edges."""
+
+	def test_unmatched_phone_id_returns_none_not_default(self):
+		from frappe_whatsapp.utils import get_whatsapp_account
+
+		acct = _account("Conv Resolve Default", "conv_resolve_pid", "conv_resolve_vt", incoming=1)
+		# phone_id supplied but unmatched -> None (no default fallback)
+		self.assertIsNone(get_whatsapp_account("phone_id_that_matches_nothing"))
+		# a matched phone_id resolves to that account
+		self.assertEqual(get_whatsapp_account("conv_resolve_pid").name, acct)
+		# phone_id=None keeps the default-selection fallback (outgoing/template paths)
+		self.assertEqual(get_whatsapp_account(None, "incoming").name, acct)
+
+	def test_format_number_none_returns_none(self):
+		from frappe_whatsapp.utils import format_number
+
+		self.assertIsNone(format_number(None))
+		self.assertEqual(format_number("+5215551234567"), "5215551234567")
+		self.assertEqual(format_number("5215551234567"), "5215551234567")
