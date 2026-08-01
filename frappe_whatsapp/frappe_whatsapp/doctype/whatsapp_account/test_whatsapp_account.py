@@ -26,6 +26,7 @@ class TestWhatsAppAccount(IntegrationTestCase):
         """Helper to create a WhatsApp Account."""
         doc = frappe.get_doc({
             "doctype": "WhatsApp Account",
+            "token": "test-token",
             "account_name": account_name,
             "status": kwargs.get("status", "Active"),
             "url": kwargs.get("url", "https://graph.facebook.com"),

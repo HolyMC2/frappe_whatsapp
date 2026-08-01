@@ -4,8 +4,8 @@ import json
 import frappe
 from frappe import _, throw
 from frappe.model.document import Document
-from frappe.integrations.utils import make_post_request
 
+from frappe_whatsapp import transport
 from frappe_whatsapp.utils import get_whatsapp_account, format_number
 
 class WhatsAppMessage(Document):
@@ -409,7 +409,9 @@ class WhatsAppMessage(Document):
             account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
             token = account.get_password("token")
             with open(path, "rb") as fh:
-                r = requests.post(
+                r = transport.raw(
+                    account,
+                    "POST",
                     f"{account.url}/{account.version}/{account.phone_id}/media",
                     headers={"authorization": f"Bearer {token}"},
                     files={"file": (os.path.basename(path), fh, mime)},
@@ -532,12 +534,19 @@ class WhatsAppMessage(Document):
             "content-type": "application/json",
         }
         try:
-            response = make_post_request(
+            response = transport.api(
+                whatsapp_account,
+                "POST",
                 f"{whatsapp_account.url}/{whatsapp_account.version}/{whatsapp_account.phone_id}/messages",
                 headers=headers,
                 data=json.dumps(data),
             )
             self.message_id = response["messages"][0]["id"]
+            # Stamp the row so a suppressed send is never read back as a real
+            # customer conversation. transport hands back a wamid.demo-* id, but
+            # the flag is what the chat UI, exports and reporting filter on.
+            if transport.is_demo(whatsapp_account):
+                self.is_demo = 1
 
         except Exception as e:
             res = frappe.flags.integration_request.json().get("error", {})
@@ -579,7 +588,9 @@ class WhatsAppMessage(Document):
             "content-type": "application/json",
         }
         try:
-            response = make_post_request(
+            response = transport.api(
+                settings,
+                "POST",
                 f"{settings.url}/{settings.version}/{settings.phone_id}/messages",
                 headers=headers,
                 data=json.dumps(data),

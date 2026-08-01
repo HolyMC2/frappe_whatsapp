@@ -1,5 +1,7 @@
 """Webhook."""
 import frappe
+
+from frappe_whatsapp import transport
 import json
 import requests
 import time
@@ -222,14 +224,18 @@ def post():
 					headers = {
 						'Authorization': 'Bearer ' + token
 					}
-					response = requests.get(f'{url}{media_id}/', headers=headers, timeout=(5, 30))
+					response = transport.raw(
+						whatsapp_account, "GET", f'{url}{media_id}/', headers=headers, timeout=(5, 30)
+					)
 					response.raise_for_status()
 					media_data = response.json()
 					media_url = media_data["url"]
 					mime_type = media_data.get("mime_type") or ""
 					file_extension = mime_type.split('/')[1] if "/" in mime_type else "bin"
 
-					media_response = requests.get(media_url, headers=headers, timeout=(5, 60))
+					media_response = transport.raw(
+						whatsapp_account, "GET", media_url, headers=headers, timeout=(5, 60)
+					)
 					media_response.raise_for_status()
 
 					file_data = media_response.content

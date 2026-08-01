@@ -9,6 +9,7 @@
   "label",
   "type",
   "status",
+  "is_demo",
   "failure_reason",
   "to",
   "from",
@@ -69,8 +70,18 @@
    "read_only": 1
   },
   {
+   "fieldname": "is_demo",
+   "fieldtype": "Check",
+   "label": "Demo",
+   "default": "0",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Set when the sending WhatsApp Account was in Demo mode: this message was never delivered to Meta. Marked so demo traffic is never read as a real customer conversation in the chat UI, exports or reporting."
+  },
+  {
    "depends_on": "eval:doc.status=='failed'",
-   "description": "Meta's async failure detail from the status webhook (code · title · message).",
+   "description": "Meta's async failure detail from the status webhook (code \u00b7 title \u00b7 message).",
    "fieldname": "failure_reason",
    "fieldtype": "Small Text",
    "label": "Failure Reason",

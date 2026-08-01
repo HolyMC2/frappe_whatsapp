@@ -5,7 +5,7 @@ import json
 import frappe
 from frappe import _
 from frappe.model.document import Document
-from frappe.integrations.utils import make_post_request, make_request
+from frappe_whatsapp import transport
 
 
 class WhatsAppFlow(Document):
@@ -329,7 +329,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            response = make_post_request(url, headers=headers, data=json.dumps(payload))
+            response = transport.api(account, "POST", url, headers=headers, data=json.dumps(payload))
             self.flow_id = response.get("id")
             self.save()
 
@@ -366,8 +366,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            import requests
-            response = requests.post(url, headers=headers, files=files)
+            response = transport.raw(account, "POST", url, headers=headers, files=files)
 
             if response.status_code != 200:
                 error_data = response.json()
@@ -403,8 +402,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            import requests
-            response = requests.post(url, headers=headers)
+            response = transport.raw(account, "POST", url, headers=headers)
 
             if response.status_code != 200:
                 error_data = response.json()
@@ -436,7 +434,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            response = make_post_request(url, headers=headers)
+            response = transport.api(account, "POST", url, headers=headers)
             self.status = "Deprecated"
             self.save()
 
@@ -461,8 +459,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            import requests
-            response = requests.delete(url, headers=headers)
+            response = transport.raw(account, "DELETE", url, headers=headers)
             response.raise_for_status()
 
             self.flow_id = None
@@ -490,8 +487,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            import requests
-            response = requests.get(url, headers=headers)
+            response = transport.raw(account, "GET", url, headers=headers)
             response.raise_for_status()
 
             data = response.json()
@@ -553,8 +549,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            import requests
-            response = requests.get(url, headers=headers)
+            response = transport.raw(account, "GET", url, headers=headers)
             response.raise_for_status()
 
             data = response.json()
@@ -607,8 +602,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            import requests
-            response = requests.get(url, headers=headers)
+            response = transport.raw(account, "GET", url, headers=headers)
             response.raise_for_status()
 
             data = response.json()
@@ -651,8 +645,7 @@ class WhatsAppFlow(Document):
         }
 
         try:
-            import requests
-            response = requests.get(url, headers=headers)
+            response = transport.raw(account, "GET", url, headers=headers)
             response.raise_for_status()
 
             data = response.json()
@@ -664,7 +657,7 @@ class WhatsAppFlow(Document):
                     # Download the asset
                     download_url = asset.get("download_url")
                     if download_url:
-                        asset_response = requests.get(download_url, headers=headers)
+                        asset_response = transport.raw(account, "GET", download_url, headers=headers)
                         if asset_response.status_code == 200:
                             return asset_response.json()
 
@@ -695,8 +688,7 @@ def get_whatsapp_flows(whatsapp_account):
     }
 
     try:
-        import requests
-        response = requests.get(url, headers=headers)
+        response = transport.raw(account, "GET", url, headers=headers)
         response.raise_for_status()
 
         data = response.json()
@@ -742,8 +734,7 @@ def import_flow_from_whatsapp(whatsapp_account, flow_id, flow_name=None):
     }
 
     try:
-        import requests
-        response = requests.get(url, headers=headers)
+        response = transport.raw(account, "GET", url, headers=headers)
         response.raise_for_status()
 
         data = response.json()
@@ -790,8 +781,7 @@ def fetch_flow_json_by_id(whatsapp_account, flow_id):
     }
 
     try:
-        import requests
-        response = requests.get(url, headers=headers)
+        response = transport.raw(account, "GET", url, headers=headers)
         response.raise_for_status()
 
         data = response.json()
@@ -801,7 +791,7 @@ def fetch_flow_json_by_id(whatsapp_account, flow_id):
             if asset.get("name") == "flow.json":
                 download_url = asset.get("download_url")
                 if download_url:
-                    asset_response = requests.get(download_url, headers=headers)
+                    asset_response = transport.raw(account, "GET", download_url, headers=headers)
                     if asset_response.status_code == 200:
                         return asset_response.json()
 
@@ -836,8 +826,7 @@ def sync_all_flows(whatsapp_account):
     result = {"imported": 0, "updated": 0, "skipped": 0}
 
     try:
-        import requests
-        response = requests.get(url, headers=headers)
+        response = transport.raw(account, "GET", url, headers=headers)
         response.raise_for_status()
 
         data = response.json()

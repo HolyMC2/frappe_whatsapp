@@ -27,6 +27,7 @@ class TestWebhookHelpers(IntegrationTestCase):
         if not frappe.db.exists("WhatsApp Account", "Test WA Webhook Account"):
             account = frappe.get_doc({
                 "doctype": "WhatsApp Account",
+                "token": "test-token",
                 "account_name": "Test WA Webhook Account",
                 "status": "Active",
                 "url": "https://graph.facebook.com",
@@ -161,6 +162,7 @@ class TestWebhookEndpoint(IntegrationTestCase):
         if not frappe.db.exists("WhatsApp Account", "Test WA Webhook EP Account"):
             account = frappe.get_doc({
                 "doctype": "WhatsApp Account",
+                "token": "test-token",
                 "account_name": "Test WA Webhook EP Account",
                 "status": "Active",
                 "url": "https://graph.facebook.com",

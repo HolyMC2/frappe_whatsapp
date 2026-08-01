@@ -22,6 +22,7 @@ class TestWhatsAppNotification(IntegrationTestCase):
         if not frappe.db.exists("WhatsApp Account", "Test WA Notif Account"):
             account = frappe.get_doc({
                 "doctype": "WhatsApp Account",
+                "token": "test-token",
                 "account_name": "Test WA Notif Account",
                 "status": "Active",
                 "url": "https://graph.facebook.com",
@@ -167,7 +168,7 @@ class TestWhatsAppNotification(IntegrationTestCase):
         cached = frappe.cache().get_value("whatsapp_notification_map")
         self.assertFalse(cached)
 
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_notification.whatsapp_notification.make_post_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
     def test_send_template_message(self, mock_post):
         """Test send_template_message sends correct data."""
         mock_post.return_value = {
@@ -200,7 +201,7 @@ class TestWhatsAppNotification(IntegrationTestCase):
         self.assertEqual(sent_data["type"], "template")
         self.assertEqual(sent_data["template"]["name"], "test_notif_template")
 
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_notification.whatsapp_notification.make_post_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
     def test_send_template_message_with_condition(self, mock_post):
         """Test that condition evaluation works."""
         mock_post.return_value = {
@@ -225,7 +226,7 @@ class TestWhatsAppNotification(IntegrationTestCase):
         doc.send_template_message(user)
         self.assertTrue(mock_post.called)
 
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_notification.whatsapp_notification.make_post_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
     def test_send_template_message_condition_not_met(self, mock_post):
         """Test that message is not sent when condition is not met."""
         doc = self._make_notification(

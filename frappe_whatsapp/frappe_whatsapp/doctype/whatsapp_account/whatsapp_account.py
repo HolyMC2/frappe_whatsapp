@@ -3,7 +3,7 @@
 
 import frappe
 from frappe import _
-from frappe.integrations.utils import make_post_request
+from frappe_whatsapp import transport
 from frappe.model.document import Document
 
 
@@ -55,7 +55,7 @@ class WhatsAppAccount(Document):
 		}
 
 		try:
-			response = make_post_request(endpoint, headers=headers)
+			response = transport.api(self, "POST", endpoint, headers=headers)
 		except Exception as e:
 			error_message = str(e)
 			if frappe.flags.integration_request:

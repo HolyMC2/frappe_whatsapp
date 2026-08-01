@@ -6,7 +6,7 @@ import frappe
 from frappe import _dict, _
 from frappe.model.document import Document
 from frappe.utils.safe_exec import get_safe_globals, safe_exec
-from frappe.integrations.utils import make_post_request
+from frappe_whatsapp import transport
 from frappe.desk.form.utils import get_pdf_link
 from frappe.utils import add_to_date, nowdate, datetime
 
@@ -266,7 +266,9 @@ class WhatsAppNotification(Document):
         }
         try:
             success = False
-            response = make_post_request(
+            response = transport.api(
+                whatsapp_account,
+                "POST",
                 f"{whatsapp_account.url}/{whatsapp_account.version}/{whatsapp_account.phone_id}/messages",
                 headers=headers, data=json.dumps(data)
             )

@@ -41,6 +41,7 @@ class TestGetWhatsAppAccount(IntegrationTestCase):
         if not frappe.db.exists("WhatsApp Account", "Test Utils Account"):
             account = frappe.get_doc({
                 "doctype": "WhatsApp Account",
+                "token": "test-token",
                 "account_name": "Test Utils Account",
                 "status": "Active",
                 "url": "https://graph.facebook.com",
@@ -103,6 +104,7 @@ class TestGetNotificationsMap(IntegrationTestCase):
         if not frappe.db.exists("WhatsApp Account", "Test Utils Map Account"):
             account = frappe.get_doc({
                 "doctype": "WhatsApp Account",
+                "token": "test-token",
                 "account_name": "Test Utils Map Account",
                 "status": "Active",
                 "url": "https://graph.facebook.com",

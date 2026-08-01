@@ -7,7 +7,7 @@ import frappe
 import magic
 import requests
 from frappe.model.document import Document
-from frappe.integrations.utils import make_post_request, make_request
+from frappe_whatsapp import transport
 from frappe.desk.form.utils import get_pdf_link
 
 from frappe_whatsapp.utils import get_whatsapp_account
@@ -58,7 +58,9 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
             'messaging_product': 'whatsapp'
         }
 
-        response = make_post_request(
+        response = transport.api(
+            self.whatsapp_account,
+            "POST",
             f"{self._url}/{self._version}/{self._app_id}/uploads",
             headers=self._headers,
             data=json.loads(json.dumps(payload))
@@ -106,7 +108,9 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
             file_content = self._read_local_file(file)
 
         payload = file_content
-        response = make_post_request(
+        response = transport.api(
+            self.whatsapp_account,
+            "POST",
             f"{self._url}/{self._version}/{self._session_id}",
             headers=headers,
             data=payload
@@ -175,7 +179,9 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
             data["components"].append(button_block)
 
         try:
-            response = make_post_request(
+            response = transport.api(
+                self.whatsapp_account,
+                "POST",
                 f"{self._url}/{self._version}/{self._business_id}/message_templates",
                 headers=self._headers,
                 data=json.dumps(data),
@@ -234,7 +240,9 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
 
         try:
             # post template to meta for update
-            make_post_request(
+            transport.api(
+                self.whatsapp_account,
+                "POST",
                 f"{self._url}/{self._version}/{self.id}",
                 headers=self._headers,
                 data=json.dumps(data),
@@ -268,7 +276,7 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
         self.get_settings()
         url = f"{self._url}/{self._version}/{self._business_id}/message_templates?name={self.actual_name}"
         try:
-            make_request("DELETE", url, headers=self._headers)
+            transport.api(self.whatsapp_account, "DELETE", url, headers=self._headers)
         except Exception:
             res = frappe.flags.integration_request.json().get("error", {})
             if res.get("error_user_title") == "Message Template Not Found":
@@ -315,7 +323,8 @@ def fetch():
         headers = {"authorization": f"Bearer {token}", "content-type": "application/json"}
 
         try:
-            response = make_request(
+            response = transport.api(
+                account.name,
                 "GET",
                 f"{url}/{version}/{business_id}/message_templates",
                 headers=headers,

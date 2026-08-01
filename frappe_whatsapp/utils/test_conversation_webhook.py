@@ -26,7 +26,7 @@ from frappe.tests import IntegrationTestCase
 
 # make_post_request is bound into the message doctype module — patch it there so
 # any downstream Outgoing send (chatflow auto-reply) is a no-op, never live Meta.
-_MPR = "frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_message.whatsapp_message.make_post_request"
+_MPR = "frappe_whatsapp.transport.make_post_request"
 
 _A = "Conv WH Account A"
 _B = "Conv WH Account B"
@@ -42,6 +42,7 @@ def _account(name, phone_id, verify_token, incoming=0, outgoing=0):
 	acct = frappe.get_doc(
 		{
 			"doctype": "WhatsApp Account",
+			"token": "test-token",
 			"account_name": name,
 			"status": "Active",
 			"url": "https://graph.facebook.com",
@@ -245,7 +246,7 @@ class TestWebhookMedia(IntegrationTestCase):
 		bad = MagicMock()
 		bad.status_code = 404
 		bad.raise_for_status.side_effect = requests_lib.exceptions.HTTPError("404")
-		with patch("frappe_whatsapp.utils.webhook.requests.get", return_value=bad):
+		with patch("frappe_whatsapp.utils.webhook.transport.raw", return_value=bad):
 			self._post(_image_payload(_PID_A, "5215551234520", "wamid.conv_media_lost"))
 
 		msg = frappe.get_doc("WhatsApp Message", {"message_id": "wamid.conv_media_lost"})
@@ -263,7 +264,7 @@ class TestWebhookMedia(IntegrationTestCase):
 			"text": {"body": "texto que no debe perderse"},
 		}
 		with patch(
-			"frappe_whatsapp.utils.webhook.requests.get",
+			"frappe_whatsapp.utils.webhook.transport.raw",
 			side_effect=requests_lib.exceptions.Timeout("stalled CDN"),
 		):
 			self._post(
@@ -298,7 +299,7 @@ class TestWebhookMedia(IntegrationTestCase):
 			b"\xff?\x00\x05\xfe\x02\xfe\xa75\x81\x84\x00\x00\x00\x00IEND\xaeB`\x82"
 		)
 		with patch(
-			"frappe_whatsapp.utils.webhook.requests.get", side_effect=[meta_resp, bin_resp]
+			"frappe_whatsapp.utils.webhook.transport.raw", side_effect=[meta_resp, bin_resp]
 		):
 			self._post(_image_payload(_PID_A, "5215551234522", "wamid.conv_media_ok", caption="ok"))
 

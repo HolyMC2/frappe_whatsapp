@@ -21,6 +21,7 @@ class TestWhatsAppTemplates(IntegrationTestCase):
         if not frappe.db.exists("WhatsApp Account", "Test WA Tmpl Account"):
             account = frappe.get_doc({
                 "doctype": "WhatsApp Account",
+                "token": "test-token",
                 "account_name": "Test WA Tmpl Account",
                 "status": "Active",
                 "url": "https://graph.facebook.com",
@@ -81,7 +82,7 @@ class TestWhatsAppTemplates(IntegrationTestCase):
         doc = self._make_template_without_hooks(template_name="test_tmpl_autoname")
         self.assertEqual(doc.name, "test_tmpl_autoname-en")
 
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_templates.whatsapp_templates.make_post_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
     def test_language_code_set_on_validate(self, mock_post):
         """Test language_code is derived from language field on validate."""
         mock_post.return_value = {}
@@ -147,7 +148,7 @@ class TestWhatsAppTemplates(IntegrationTestCase):
         self.assertEqual(doc._version, "v17.0")
         self.assertEqual(doc._business_id, "tmpl_test_business_id")
 
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_templates.whatsapp_templates.make_post_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
     def test_after_insert_creates_template_on_meta(self, mock_post):
         """Test after_insert sends template to Meta API."""
         mock_post.return_value = {
@@ -175,7 +176,7 @@ class TestWhatsAppTemplates(IntegrationTestCase):
         self.assertEqual(sent_data["category"], "TRANSACTIONAL")
         self.assertTrue(any(c["type"] == "BODY" for c in sent_data["components"]))
 
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_templates.whatsapp_templates.make_post_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
     def test_after_insert_with_footer(self, mock_post):
         """Test template creation includes footer in components."""
         mock_post.return_value = {"id": "tmpl_footer_id", "status": "PENDING"}
@@ -198,7 +199,7 @@ class TestWhatsAppTemplates(IntegrationTestCase):
         self.assertEqual(len(footer_components), 1)
         self.assertEqual(footer_components[0]["text"], "Reply STOP to opt out")
 
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_templates.whatsapp_templates.make_post_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
     def test_after_insert_with_buttons(self, mock_post):
         """Test template creation includes buttons."""
         mock_post.return_value = {"id": "tmpl_btn_id", "status": "PENDING"}
@@ -233,8 +234,8 @@ class TestWhatsAppTemplates(IntegrationTestCase):
         self.assertEqual(buttons[0]["type"], "QUICK_REPLY")
         self.assertEqual(buttons[1]["type"], "URL")
 
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_templates.whatsapp_templates.make_post_request")
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_templates.whatsapp_templates.make_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
+    @patch("frappe_whatsapp.transport.make_request")
     def test_on_trash_deletes_from_meta(self, mock_request, mock_post):
         """Test on_trash calls Meta API to delete template."""
         mock_post.return_value = {"id": "tmpl_trash_id", "status": "PENDING"}
@@ -260,8 +261,8 @@ class TestWhatsAppTemplates(IntegrationTestCase):
         self.assertIn("message_templates", delete_call[0][1])
 
     @patch("frappe.model.document.Document.get_password", return_value="mock_token")
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_templates.whatsapp_templates.make_request")
-    @patch("frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_templates.whatsapp_templates.make_post_request")
+    @patch("frappe_whatsapp.transport.make_request")
+    @patch("frappe_whatsapp.transport.make_post_request")
     def test_fetch_templates_from_meta(self, mock_post, mock_get, mock_get_password):
         """Test the fetch whitelisted function."""
         mock_get.return_value = {
