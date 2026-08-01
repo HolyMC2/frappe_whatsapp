@@ -560,6 +560,12 @@ class WhatsAppMessage(Document):
             # is_demo is stamped in validate() for both directions — see
             # stamp_demo_flag(). transport also hands back a wamid.demo-* id.
 
+        except transport.NotConfigured:
+            # Fail-closed guard fired BEFORE any HTTP, so there is no
+            # integration_request flag for the handler below to read — it would
+            # raise AttributeError on None and mask the one actionable message
+            # the guard exists to produce. Re-raise it intact.
+            raise
         except Exception as e:
             res = frappe.flags.integration_request.json().get("error", {})
             error_message = res.get("Error", res.get("message"))
@@ -613,6 +619,12 @@ class WhatsAppMessage(Document):
                 self.save()
                 return response.get("success")
 
+        except transport.NotConfigured:
+            # Fail-closed guard fired BEFORE any HTTP, so there is no
+            # integration_request flag for the handler below to read — it would
+            # raise AttributeError on None and mask the one actionable message
+            # the guard exists to produce. Re-raise it intact.
+            raise
         except Exception as e:
             res = frappe.flags.integration_request.json().get("error", {})
             error_message = res.get("Error", res.get("message"))

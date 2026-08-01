@@ -3,8 +3,14 @@
 
 """Tests for frappe_whatsapp.transport — the single Meta egress point.
 
-The property under test is a safety property, not a feature: in Demo mode NO
-HTTP request may leave the process. Everything else here supports that claim.
+The property under test is a safety property, not a feature: in Demo mode no
+Graph API call may leave the process, so no message can reach a phone.
+
+Scope, stated precisely because the earlier wording overclaimed: this covers
+account-scoped Meta traffic. It does NOT make the app network-silent —
+whatsapp_templates._prepare_remote_file still fetches a caller-supplied media
+URL directly (see _ALLOWED), which is egress to an arbitrary host even in Demo
+mode. That is a known, exempted hole, not a covered case.
 """
 
 import pathlib
@@ -157,7 +163,17 @@ class TestEgressInvariant(unittest.TestCase):
 		# package (an earlier hand audit walked only the package and missed the
 		# two Meta media-download calls in utils/webhook.py).
 		root = pathlib.Path(transport.__file__).parent
-		pattern = re.compile(r"\b(make_post_request|make_request)\s*\(|\brequests\.(post|get|delete|put)\s*\(")
+		# Widened after review: the first version matched only
+		# make_post_request/make_request and requests.(post|get|delete|put),
+		# so requests.request(, requests.patch/head, requests.Session(),
+		# make_get_request, urllib and httpx would all have slipped past and
+		# the test would have stayed green while Demo mode was bypassed.
+		pattern = re.compile(
+			r"\b(make_post_request|make_request|make_get_request|make_put_request)\s*\("
+			r"|\brequests\.[A-Za-z_]+\s*\("
+			r"|\bhttpx\.[A-Za-z_]+\s*\("
+			r"|\burllib\.request\.[A-Za-z_]+\s*\("
+		)
 		offenders = []
 		for py in root.rglob("*.py"):
 			rel = py.relative_to(root).as_posix()

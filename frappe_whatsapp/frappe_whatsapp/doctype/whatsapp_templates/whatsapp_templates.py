@@ -6,6 +6,7 @@ import json
 import frappe
 import magic
 import requests
+from frappe import _, throw
 from frappe.model.document import Document
 from frappe_whatsapp import transport
 from frappe.desk.form.utils import get_pdf_link
@@ -189,6 +190,12 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
             self.id = response["id"]  # nosemgrep: frappe-modifying-but-not-committing
             self.status = response["status"]  # nosemgrep: frappe-modifying-but-not-committing
             self.db_update()
+        except transport.NotConfigured:
+            # Fail-closed guard fired BEFORE any HTTP, so there is no
+            # integration_request flag for the handler below to read — it would
+            # raise AttributeError on None and mask the one actionable message
+            # the guard exists to produce. Re-raise it intact.
+            raise
         except Exception as e:
             res = frappe.flags.integration_request.json().get("error", {})
             error_message = res.get("error_user_msg", res.get("message"))
@@ -277,6 +284,12 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
         url = f"{self._url}/{self._version}/{self._business_id}/message_templates?name={self.actual_name}"
         try:
             transport.api(self.whatsapp_account, "DELETE", url, headers=self._headers)
+        except transport.NotConfigured:
+            # Fail-closed guard fired BEFORE any HTTP, so there is no
+            # integration_request flag for the handler below to read — it would
+            # raise AttributeError on None and mask the one actionable message
+            # the guard exists to produce. Re-raise it intact.
+            raise
         except Exception:
             res = frappe.flags.integration_request.json().get("error", {})
             if res.get("error_user_title") == "Message Template Not Found":
@@ -413,8 +426,6 @@ def fetch():
 
                 upsert_doc_without_hooks(doc, "WhatsApp Button", "buttons")
 
-            return "Successfully fetched templates from meta"
-
         except Exception as e:
             # Check if frappe.flags.integration_request is set and has a .json() method
             if hasattr(frappe.flags.integration_request, 'json'):
@@ -431,6 +442,14 @@ def fetch():
             else:
                 # Handle cases where frappe.flags.integration_request doesn't exist or isn't a proper response object
                 frappe.throw(f"An unexpected server error occurred: {e}")
+
+    # Outside the loop. This return used to sit INSIDE it, so only the first
+    # Active account was ever synced and the rest were silently skipped —
+    # harmless-looking until Demo mode arrived: a Demo account sorted first
+    # returns an empty catalogue and exits "Successfully fetched", killing
+    # template sync for every LIVE account on the site.
+    return "Successfully fetched templates from meta"
+
 
 def upsert_doc_without_hooks(doc, child_dt, child_field):
     """Insert or update a parent document and its children without hooks."""

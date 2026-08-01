@@ -66,6 +66,10 @@ MODE_DEMO = "Demo"
 DEMO_ID_PREFIX = "wamid.demo-"
 
 
+class NotConfigured(frappe.ValidationError):
+	"""Raised before any HTTP happens, so no integration_request flag exists."""
+
+
 # --------------------------------------------------------------------------
 # account + mode resolution
 # --------------------------------------------------------------------------
@@ -130,7 +134,17 @@ def _demo_payload(method: str, url: str, data: Any = None) -> dict:
 			"messages": [{"id": f"{DEMO_ID_PREFIX}{uuid.uuid4().hex[:16]}"}],
 		}
 
-	if path.endswith("/media") or path.endswith("/uploads") or path.startswith("/upload"):
+	if path.endswith("/media") or path.endswith("/uploads"):
+		return {"id": _demo_id("media"), "h": _demo_id("handle")}
+
+	# Resumable-upload FINISH: whatsapp_templates.get_session_id POSTs to
+	# .../{app_id}/uploads and keeps response["id"] as a session id, then
+	# get_media_id POSTs the bytes to .../{version}/{session_id} and reads
+	# response["h"]. That second URL is just `/{version}/{opaque-id}` — it
+	# matches no endpoint-shaped pattern, so it used to fall through to the
+	# generic success below and raise KeyError 'h', breaking Demo mode for every
+	# IMAGE/DOCUMENT template with a sample. Recognise the session id we minted.
+	if method == "POST" and "demo-media-" in path:
 		return {"id": _demo_id("media"), "h": _demo_id("handle")}
 
 	if "message_templates" in path:
@@ -228,12 +242,20 @@ def _guard_live(account_doc, url: str) -> None:
 	except Exception:
 		token = None
 	if not token:
+		# NotConfigured, not a bare ValidationError: the call sites wrap their
+		# send in `except Exception` and then unconditionally read
+		# `frappe.flags.integration_request.json()`. This throw never reached
+		# make_post_request, so that flag is unset and the read raises
+		# AttributeError on None — masking the one actionable message this guard
+		# exists to produce with an opaque 500. Callers re-raise this class
+		# before touching the flag.
 		frappe.throw(
 			_(
 				"WhatsApp Account {0} has no token, so it cannot send. Set the token, "
 				"or switch the account to Demo mode to exercise the flow without "
 				"contacting Meta."
 			).format(getattr(account_doc, "name", "?")),
+			exc=NotConfigured,
 			title=_("WhatsApp account not configured"),
 		)
 
