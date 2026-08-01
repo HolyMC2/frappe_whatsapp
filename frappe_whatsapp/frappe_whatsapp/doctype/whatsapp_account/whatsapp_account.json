@@ -15,6 +15,7 @@
   "url",
   "version",
   "webhook_verify_token",
+  "app_secret",
   "column_break_byyq",
   "phone_id",
   "app_id",
@@ -62,6 +63,12 @@
    "fieldtype": "Data",
    "label": "Webhook Verify Token",
    "unique": 1
+  },
+  {
+   "fieldname": "app_secret",
+   "fieldtype": "Password",
+   "label": "App Secret",
+   "description": "Meta App Secret, used to verify the X-Hub-Signature-256 header on inbound webhooks. Meta > App > Settings > Basic > App Secret. LEAVE EMPTY to keep the current unverified behaviour; the moment ANY account on the site sets one, unsigned or wrongly-signed webhook POSTs are rejected site-wide."
   },
   {
    "fieldname": "column_break_byyq",

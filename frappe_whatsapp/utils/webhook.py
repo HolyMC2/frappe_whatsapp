@@ -9,7 +9,7 @@ from frappe import _
 from werkzeug.wrappers import Response
 import frappe.utils
 
-from frappe_whatsapp.utils import get_whatsapp_account
+from frappe_whatsapp.utils import get_whatsapp_account, signature
 
 
 @frappe.whitelist(allow_guest=True)
@@ -39,6 +39,12 @@ def get():
 
 def post():
 	"""Post."""
+	# Authenticate BEFORE anything else. The Notification Log insert below is
+	# the first write and lands ahead of any parsing, so verifying later would
+	# still let an unauthenticated caller fill that table. See utils.signature:
+	# no-op until an app_secret is configured, mandatory site-wide once one is.
+	signature.verify_request()
+
 	data = frappe.local.form_dict
 	frappe.get_doc({
 		"doctype": "WhatsApp Notification Log",
