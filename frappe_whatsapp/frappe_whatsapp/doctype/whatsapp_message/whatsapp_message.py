@@ -11,6 +11,21 @@ from frappe_whatsapp.utils import get_whatsapp_account, format_number
 class WhatsAppMessage(Document):
     def validate(self):
         self.set_whatsapp_account()
+        self.stamp_demo_flag()
+
+    def stamp_demo_flag(self):
+        """Mark the row when its account is in Demo mode.
+
+        Here rather than in notify() so INBOUND simulated messages are marked
+        too — notify() only runs on the outbound path, which would have left
+        simulated conversations looking real from the receiving side.
+
+        Set-only, never cleared: if an account is later flipped Demo -> Live,
+        messages that never reached Meta must keep saying so. Clearing on
+        re-save would launder demo traffic into the real conversation history.
+        """
+        if transport.is_demo(self.whatsapp_account):
+            self.is_demo = 1
 
     def on_update(self):
         self.update_profile_name()
@@ -542,11 +557,8 @@ class WhatsAppMessage(Document):
                 data=json.dumps(data),
             )
             self.message_id = response["messages"][0]["id"]
-            # Stamp the row so a suppressed send is never read back as a real
-            # customer conversation. transport hands back a wamid.demo-* id, but
-            # the flag is what the chat UI, exports and reporting filter on.
-            if transport.is_demo(whatsapp_account):
-                self.is_demo = 1
+            # is_demo is stamped in validate() for both directions — see
+            # stamp_demo_flag(). transport also hands back a wamid.demo-* id.
 
         except Exception as e:
             res = frappe.flags.integration_request.json().get("error", {})
