@@ -165,6 +165,78 @@ class TestDemoInbound(unittest.TestCase):
 		out_name = next(m["name"] for m in created if m["direction"] == "out")
 		self.assertEqual(frappe.db.get_value("WhatsApp Message", out_name, "is_demo"), 1)
 
+	# --- authorization + cross-account containment ---------------------------
+
+	def test_requires_system_manager(self):
+		"""Every entry point was a bare @frappe.whitelist(), so any authenticated
+		user — including a portal Website User — could drive the simulator."""
+		victim = "demo-sim-lowpriv@example.com"
+		if not frappe.db.exists("User", victim):
+			u = frappe.get_doc({
+				"doctype": "User", "email": victim, "first_name": "LowPriv",
+				"send_welcome_email": 0, "user_type": "Website User",
+			})
+			u.flags.ignore_permissions = True
+			u.insert(ignore_permissions=True)
+			frappe.db.commit()
+		self.addCleanup(frappe.set_user, "Administrator")
+		frappe.set_user(victim)
+		with self.assertRaises(frappe.PermissionError):
+			demo.simulate_inbound_text(self.demo_acc, _FROM, "deberia rebotar")
+
+	def test_delivery_status_refuses_another_account(self):
+		"""The Demo guard alone was NOT enough here: a status envelope carries no
+		`messages`, so webhook.post() routes to update_message_status, which
+		resolves the target by message_id ALONE with no account filter. Passing a
+		LIVE account's wamid rewrote that real message's status."""
+		frappe.set_user("Administrator")
+		live_msg = frappe.get_doc({
+			"doctype": "WhatsApp Message",
+			"type": "Incoming",
+			"from": "5215551234567",
+			"message": "mensaje real de cliente",
+			"message_id": "wamid.REAL-CUSTOMER-MSG",
+			"content_type": "text",
+			"whatsapp_account": self.live_acc,
+			"status": "delivered",
+		})
+		live_msg.flags.ignore_permissions = True
+		live_msg.insert(ignore_permissions=True)
+		frappe.db.commit()
+		self.addCleanup(
+			frappe.delete_doc, "WhatsApp Message", live_msg.name,
+			force=1, ignore_permissions=True,
+		)
+
+		with self.assertRaises(frappe.ValidationError):
+			demo.simulate_delivery_status(
+				self.demo_acc, "wamid.REAL-CUSTOMER-MSG", "failed"
+			)
+		self.assertEqual(
+			frappe.db.get_value("WhatsApp Message", live_msg.name, "status"),
+			"delivered",
+			"a real customer message must not be rewritten by the simulator",
+		)
+
+	def test_rejects_account_without_phone_id(self):
+		"""Without a phone_id the webhook drops the message but the caller still
+		got {"simulated": True} — success reported, empty thread shown."""
+		frappe.set_user("Administrator")
+		name = _account("DEMO-TEST-NOPHONE", transport.MODE_DEMO, "")
+		self.addCleanup(
+			frappe.delete_doc, "WhatsApp Account", name, force=1, ignore_permissions=True
+		)
+		frappe.db.set_value("WhatsApp Account", name, "phone_id", "")
+		frappe.clear_document_cache("WhatsApp Account", name)
+		with self.assertRaises(frappe.ValidationError):
+			demo.simulate_inbound_text(name, _FROM, "sin phone id")
+
+	def test_conversation_script_is_capped(self):
+		frappe.set_user("Administrator")
+		huge = json.dumps([{"direction": "in", "body": f"m{i}"} for i in range(500)])
+		with self.assertRaises(frappe.ValidationError):
+			demo.simulate_conversation(self.demo_acc, _FROM, huge)
+
 	def test_conversation_rejects_bad_script(self):
 		with self.assertRaises(frappe.ValidationError):
 			demo.simulate_conversation(self.demo_acc, _FROM, "not json at all")
