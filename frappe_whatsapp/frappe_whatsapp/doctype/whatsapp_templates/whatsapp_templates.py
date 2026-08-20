@@ -16,7 +16,33 @@ from frappe_whatsapp.utils import get_whatsapp_account
 class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-committing-other-method -- get_settings() sets self._token/_url/_version/_business_id/_app_id/_headers as in-memory scratch for the outbound Meta HTTP call; they are not DocType fields and must not be persisted
     """Create whatsapp template."""
 
+    def is_freeform(self) -> bool:
+        """doco: a freeform row never touches Meta.
+
+        The channel ladder (CRM_CHANNEL_LADDER_SPEC) keeps ONE template store so
+        that a tenant upgrading to WABA carries its templates over by link rather
+        than by migration. But a tier-0 tenant has NO WhatsApp Account at all, and
+        every Meta path in this controller assumes one: `set_whatsapp_account`
+        throws without a default outgoing account, and `after_insert` POSTs the
+        body to Meta. Without this guard the tenant the ladder exists for cannot
+        even SAVE a template.
+
+        Read through `.get()` and via the meta check so this stays inert on a site
+        where doco_marketing has not installed the custom field — upstream
+        behaviour is unchanged when the field is absent.
+        """
+        if not self.meta.has_field("channel_scope"):
+            return False
+        return (self.get("channel_scope") or "") == "freeform"
+
     def validate(self):
+        if self.is_freeform():
+            # No account, no language round-trip, no Meta update: a freeform body
+            # is rendered locally by the composer and tapped by a human.
+            if not self.language_code:
+                lang_code = frappe.db.get_value("Language", self.language) or "es"
+                self.language_code = lang_code.replace("-", "_")
+            return
         self.set_whatsapp_account()
         if not self.language_code or self.has_value_changed("language"):
             lang_code = frappe.db.get_value("Language", self.language) or "en"
@@ -126,6 +152,8 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
 
 
     def after_insert(self):  # nosemgrep: frappe-modifying-but-not-committing -- self.actual_name/id/status are persisted via self.db_update() after the Meta round-trip; the static check can't trace through the API call
+        if self.is_freeform():
+            return
         # actual_name / id / status are persisted via self.db_update() below
         # after the Meta round-trip; the static check can't trace that call.
         if self.template_name:
@@ -206,6 +234,8 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
 
     def update_template(self):
         """Update template to meta."""
+        if self.is_freeform():
+            return
         self.get_settings()
         data = {"components": []}
 
@@ -280,6 +310,8 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
         }
 
     def on_trash(self):
+        if self.is_freeform():
+            return
         self.get_settings()
         url = f"{self._url}/{self._version}/{self._business_id}/message_templates?name={self.actual_name}"
         try:
