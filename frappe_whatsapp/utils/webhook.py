@@ -103,9 +103,15 @@ def consume_receipt(receipt):
 		return {"state": "Ignored", "reason_code": "coexistence_sync_unsupported"}
 	if payload["change"]["field"] not in {"messages", "message_template_status_update"}:
 		return {"state": "Ignored", "reason_code": "unsupported_event"}
+	activity = None
+	if receipt.event_type == "message":
+		from frappe_whatsapp.customer_activity import consume_customer_activity
+		if len(scopes) != 1:
+			raise ReceiptError("customer_activity_account_ambiguous")
+		activity = consume_customer_activity(receipt, scopes[0])
 	for scoped in scopes:
 		process_change(scoped)
-	return {"state": "Processed"}
+	return {"state": "Processed", "reason_code": (activity or {}).get("reason_code", "")}
 
 
 def process_change(scoped):
@@ -387,11 +393,21 @@ def update_message_status(data, accounts):
 
 
 def _apply_message_status(entry, accounts):
+	native = None
+	if frappe.flags.get("meta_webhook_receipt"):
+		from frappe_whatsapp.delivery import fold_native_delivery
+		native = fold_native_delivery(entry, accounts)
 	id = entry['id']
 	status = entry['status']
 	conversation = entry.get('conversation', {}).get('id')
-	name = frappe.db.get_value("WhatsApp Message", filters={"message_id": id, "whatsapp_account": ["in", accounts], "type": "Outgoing"}, for_update=True)
+	filters = {"message_id": id, "whatsapp_account": ["in", accounts], "type": "Outgoing"}
+	if native is not None:
+		# The bridge verified this recipient against the immutable status atom.
+		filters["to"] = entry["recipient_id"]
+	name = frappe.db.get_value("WhatsApp Message", filters=filters, for_update=True)
 	if not name:
+		if native and native.get("matched"):
+			return
 		if frappe.flags.get("meta_webhook_receipt"):
 			from frappe_whatsapp.webhook_receipts import ReceiptError
 			raise ReceiptError("message_not_found")
