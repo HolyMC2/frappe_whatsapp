@@ -49,6 +49,12 @@ def receipt_events(scoped):
 	from frappe_whatsapp.webhook_receipts import canonical, digest, ReceiptError
 	value = scoped.change["value"]
 	field = scoped.change["field"]
+	if field == "smb_message_echoes":
+		from frappe_whatsapp.coexistence import echo_events
+		yield from echo_events(scoped)
+		return
+	if "message_echoes" in value:
+		raise ReceiptError("echo_field_mismatch")
 	phone = (value.get("metadata") or {}).get("phone_number_id")
 	base = {"provider": "WhatsApp", "account_id": phone or scoped.business_id,
 	        "app_id": scoped.app_id}
@@ -88,6 +94,13 @@ def consume_receipt(receipt):
 			"id": payload["business_id"], "changes": [payload["change"]]}]}, accounts, receipt.app_id)
 	except frappe.PermissionError:
 		raise ReceiptError("account_scope_revoked") from None
+	if payload["change"]["field"] == "smb_message_echoes":
+		from frappe_whatsapp.coexistence import consume_echo
+		if len(scopes) != 1:
+			raise ReceiptError("echo_account_ambiguous")
+		return consume_echo(receipt, scopes[0])
+	if payload["change"]["field"] in {"history", "smb_app_state_sync"}:
+		return {"state": "Ignored", "reason_code": "coexistence_sync_unsupported"}
 	if payload["change"]["field"] not in {"messages", "message_template_status_update"}:
 		return {"state": "Ignored", "reason_code": "unsupported_event"}
 	for scoped in scopes:

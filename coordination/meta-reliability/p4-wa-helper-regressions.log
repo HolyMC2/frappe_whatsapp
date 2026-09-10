@@ -1,0 +1,49 @@
+test_default_handover_from_both_flags_account_leaves_a_default (frappe_whatsapp.utils.test_conversation_webhook.TestAccountDefaultsExclusive.test_default_handover_from_both_flags_account_leaves_a_default)
+Regression: un-defaulting the old default via doc.save() re-entered ITS ... ok
+test_default_incoming_is_exclusive (frappe_whatsapp.utils.test_conversation_webhook.TestAccountDefaultsExclusive.test_default_incoming_is_exclusive) ... ok
+test_default_outgoing_is_exclusive (frappe_whatsapp.utils.test_conversation_webhook.TestAccountDefaultsExclusive.test_default_outgoing_is_exclusive) ... ok
+test_format_number_none_returns_none (frappe_whatsapp.utils.test_conversation_webhook.TestGetWhatsAppAccountResolution.test_format_number_none_returns_none) ... ok
+test_unmatched_phone_id_returns_none_not_default (frappe_whatsapp.utils.test_conversation_webhook.TestGetWhatsAppAccountResolution.test_unmatched_phone_id_returns_none_not_default) ... ok
+test_media_fetch_failure_still_creates_placeholder_row (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookMedia.test_media_fetch_failure_still_creates_placeholder_row) ... ok
+test_media_happy_path_attaches_file (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookMedia.test_media_happy_path_attaches_file) ... ok
+test_media_timeout_does_not_lose_sibling_text_in_batch (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookMedia.test_media_timeout_does_not_lose_sibling_text_in_batch) ... ok
+test_empty_entry_arrays_do_not_500 (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_empty_entry_arrays_do_not_500) ... ok
+test_failed_status_records_failure_reason (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_failed_status_records_failure_reason)
+A failed send must persist Meta's errors[] so the failure is diagnosable ... ok
+test_get_handshake_echoes_challenge_for_matching_account (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_get_handshake_echoes_challenge_for_matching_account) ... ok
+test_get_handshake_rejects_unknown_token (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_get_handshake_rejects_unknown_token) ... ok
+test_inbound_routes_to_matching_account_by_phone_id (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_inbound_routes_to_matching_account_by_phone_id) ... ok
+test_status_for_unknown_message_is_dropped_quietly (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_status_for_unknown_message_is_dropped_quietly) ... ok
+test_unknown_phone_id_creates_no_message_even_with_a_default (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_unknown_phone_id_creates_no_message_even_with_a_default)
+Audit H2: an unmatched phone_id must NOT fall back to the default account ... ok
+test_webhook_creates_notification_log (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_creates_notification_log)
+Test that webhook POST creates a notification log entry. ... ok
+test_webhook_get_verification (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_get_verification)
+Test GET webhook verification. ... ok
+test_webhook_get_wrong_token (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_get_wrong_token)
+Test GET webhook with wrong verify token. ... ok
+test_webhook_post_button_message (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_button_message)
+Test POST webhook with button reply message. ... ok
+test_webhook_post_reaction_message (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_reaction_message)
+Test POST webhook with reaction message. ... ok
+test_webhook_post_reply_message (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_reply_message)
+Test POST webhook with reply context. ... ok
+test_webhook_post_status_update (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_status_update)
+Test POST webhook with status update (no messages). ... ok
+test_webhook_post_template_status_update (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_template_status_update)
+Template status updates have no metadata.phone_number_id; the handler ... ok
+test_webhook_post_text_message (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_text_message)
+Test POST webhook with incoming text message. ... ok
+test_update_message_status (frappe_whatsapp.utils.test_webhook.TestWebhookHelpers.test_update_message_status)
+Test update_message_status updates WhatsApp Message status. ... ok
+test_update_message_status_without_conversation (frappe_whatsapp.utils.test_webhook.TestWebhookHelpers.test_update_message_status_without_conversation)
+Test update_message_status when no conversation ID. ... ok
+test_update_status_template_status (frappe_whatsapp.utils.test_webhook.TestWebhookHelpers.test_update_status_template_status)
+Test update_status routes to template status update. ... ok
+test_update_template_status (frappe_whatsapp.utils.test_webhook.TestWebhookHelpers.test_update_template_status)
+Test update_template_status updates template status via SQL. ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 1.086s
+
+OK

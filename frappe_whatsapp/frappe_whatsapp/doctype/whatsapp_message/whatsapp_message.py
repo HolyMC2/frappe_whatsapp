@@ -10,6 +10,8 @@ from frappe_whatsapp.utils import get_whatsapp_account, format_number
 
 class WhatsAppMessage(Document):
     def validate(self):
+        from frappe_whatsapp.coexistence import reject_external_mutation
+        reject_external_mutation(self)
         self.set_whatsapp_account()
         self.stamp_demo_flag()
 
@@ -68,6 +70,8 @@ class WhatsAppMessage(Document):
     """Send whats app messages."""
     def before_insert(self):
         """Send message."""
+        from frappe_whatsapp.coexistence import reject_external_mutation
+        reject_external_mutation(self)
         self.set_whatsapp_account()
         # Route to template path when a template is selected,
         # since message_type is read_only and cannot be set from the UI.
@@ -75,6 +79,16 @@ class WhatsAppMessage(Document):
             self.message_type = "Template"
         self.send_outgoing()
         self.create_whatsapp_profile()
+
+    def _insert_external_projection(self, token):
+        """Private exact-document seam: no sends, hooks, profile or CRM routing."""
+        from frappe_whatsapp.coexistence import assert_projection_insert
+        assert_projection_insert(self, token)
+        self.db_insert()
+
+    def before_rename(self, *args, **kwargs):
+        from frappe_whatsapp.coexistence import reject_external_mutation
+        reject_external_mutation(self)
 
     def send_outgoing(self):
         """Dispatch an Outgoing message to Meta.
@@ -86,6 +100,9 @@ class WhatsAppMessage(Document):
         """
         if self.type != "Outgoing":
             return
+
+        from frappe_whatsapp.coexistence import assert_sendable
+        assert_sendable(self)
 
         if self.message_type != "Template":
             if self.attach and not self.attach.startswith("http"):
