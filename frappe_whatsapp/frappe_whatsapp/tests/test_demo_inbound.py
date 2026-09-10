@@ -129,7 +129,7 @@ class TestDemoInbound(unittest.TestCase):
 		frappe.local.form_dict = sentinel
 		from frappe_whatsapp.utils import webhook
 
-		with patch.object(webhook, "post", side_effect=RuntimeError("boom")):
+		with patch.object(webhook, "process_change", side_effect=RuntimeError("boom")):
 			with self.assertRaises(RuntimeError):
 				demo.simulate_inbound_text(self.demo_acc, _FROM, "explota")
 		self.assertEqual(frappe.local.form_dict.get("sentinel"), "keep-me-too")

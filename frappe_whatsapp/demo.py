@@ -140,14 +140,16 @@ def _dispatch(envelope: dict) -> None:
 
 	previous = getattr(frappe.local, "form_dict", None)
 	try:
-		frappe.local.form_dict = frappe._dict(envelope)
-		webhook.post()
+		_require_operator()
+		phone = envelope["entry"][0]["changes"][0]["value"]["metadata"]["phone_number_id"]
+		from frappe_whatsapp.utils import get_whatsapp_account, signature
+		account = _demo_account_or_throw(get_whatsapp_account(phone))
+		# The simulator is an explicit operator capability; never weaken HTTP auth.
+		account.app_id = account.get("app_id") or "demo-app"
+		account.business_id = account.get("business_id") or "demo-business"
+		for scoped in signature.scope_payload(envelope, [account], account.app_id):
+			webhook.process_change(scoped)
 	finally:
-		# Unconditional: restoring only when `previous` was not None left the
-		# synthetic Meta envelope on frappe.local.form_dict for the rest of the
-		# request whenever the attribute had been absent. Hard to reach (frappe
-		# .init seeds an empty _dict) and the tests seed a sentinel so they never
-		# covered the None branch — costs nothing to just always restore.
 		frappe.local.form_dict = previous if previous is not None else frappe._dict()
 
 

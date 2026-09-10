@@ -1,0 +1,112 @@
+test_ambiguous_app_secret_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_ambiguous_app_secret_denied) ... ok
+test_disabled_and_demo_accounts_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_disabled_and_demo_accounts_denied) ... ok
+test_duplicate_keys_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_duplicate_keys_denied) ... ok
+test_foreign_phone_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_foreign_phone_denied) ... ok
+test_foreign_waba_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_foreign_waba_denied) ... ok
+test_invalid_json_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_invalid_json_denied) ... ok
+test_known_different_app_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_known_different_app_denied) ... ok
+test_malformed_envelopes_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_malformed_envelopes_denied) ... ok
+test_malformed_signatures_rejected (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_malformed_signatures_rejected) ... ok
+test_message_status_requires_phone (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_message_status_requires_phone) ... ok
+test_missing_app_id_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_missing_app_id_denied) ... ok
+test_missing_secret_fails_closed (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_missing_secret_fails_closed) ... ok
+test_missing_signature_rejected (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_missing_signature_rejected) ... ok
+test_multiple_phones_same_app_all_changes_retained (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_multiple_phones_same_app_all_changes_retained) ... ok
+test_no_accounts_fails_closed (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_no_accounts_fails_closed) ... ok
+test_no_http_request_is_not_authorization (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_no_http_request_is_not_authorization) ... ok
+test_oversized_body_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_oversized_body_denied) ... ok
+test_phone_must_be_unique_in_app_waba (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_phone_must_be_unique_in_app_waba) ... ok
+test_raw_body_is_only_payload_consumed (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_raw_body_is_only_payload_consumed) ... ok
+test_scoped_status_queries (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_scoped_status_queries) ... ok
+test_tampered_raw_body_rejected (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_tampered_raw_body_rejected) ... ok
+test_template_query_is_scoped (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_template_query_is_scoped) ... ok
+test_template_scope_is_waba_and_app (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_template_scope_is_waba_and_app) ... ok
+test_unconfigured_waba_denied_even_if_payload_says_none (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_unconfigured_waba_denied_even_if_payload_says_none) ... ok
+test_valid_first_foreign_later_produces_no_writes (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_valid_first_foreign_later_produces_no_writes) ... ok
+test_valid_raw_signature_routes_exact_account (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_valid_raw_signature_routes_exact_account) ... ok
+test_wrong_secret_rejected (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_wrong_secret_rejected) ... ok
+test_conversation_rejects_bad_script (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_conversation_rejects_bad_script) ... ok
+test_conversation_script_creates_both_directions (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_conversation_script_creates_both_directions) ... ok
+test_conversation_script_is_capped (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_conversation_script_is_capped) ... ok
+test_delivery_status_refuses_another_account (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_delivery_status_refuses_another_account)
+The Demo guard alone was NOT enough here: a status envelope carries no ... ok
+test_delivery_status_rejects_unknown_status (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_delivery_status_rejects_unknown_status) ... ok
+test_form_dict_is_restored (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_form_dict_is_restored)
+_dispatch swaps frappe.local.form_dict; the rest of the request ... ok
+test_form_dict_restored_even_when_handler_raises (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_form_dict_restored_even_when_handler_raises) ... ok
+test_inbound_is_marked_demo (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_inbound_is_marked_demo)
+Inbound was the gap: the old stamp lived in notify(), which only ... ok
+test_inbound_text_creates_incoming_message_on_right_account (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_inbound_text_creates_incoming_message_on_right_account) ... ok
+test_refuses_on_live_account (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_refuses_on_live_account)
+The whole reason this module can be shipped at all. ... ok
+test_refuses_unknown_account (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_refuses_unknown_account) ... ok
+test_rejects_account_without_phone_id (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_rejects_account_without_phone_id)
+Without a phone_id the webhook drops the message but the caller still ... ok
+test_rejects_empty_body (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_rejects_empty_body) ... ok
+test_requires_system_manager (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_requires_system_manager)
+Every entry point was a bare @frappe.whitelist(), so any authenticated ... ok
+test_simulation_never_touches_meta (frappe_whatsapp.frappe_whatsapp.tests.test_demo_inbound.TestDemoInbound.test_simulation_never_touches_meta) ... ok
+test_demo_generic_get_has_media_keys (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_generic_get_has_media_keys)
+utils.webhook reads media_data["url"] unconditionally. ... ok
+test_demo_message_response_is_meta_shaped (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_message_response_is_meta_shaped) ... ok
+test_demo_never_performs_http (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_never_performs_http)
+The whole point. If either of these is called, a prospect's phone ... ok
+test_demo_raw_duck_types_response (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_raw_duck_types_response)
+Call sites converted from requests.* use these four members. ... ok
+test_demo_template_create_is_approved (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_template_create_is_approved)
+A demo tenant must end up with usable templates: taller's ... ok
+test_no_direct_meta_egress_outside_transport (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestEgressInvariant.test_no_direct_meta_egress_outside_transport) ... ok
+test_default_mode_is_live (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestLiveMode.test_default_mode_is_live)
+Existing accounts predate the field. Defaulting to Demo would ... ok
+test_live_still_calls_through (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestLiveMode.test_live_still_calls_through) ... ok
+test_live_without_token_fails_closed (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestLiveMode.test_live_without_token_fails_closed)
+Previously this fired the request and returned an opaque Meta 401. ... ok
+test_default_handover_from_both_flags_account_leaves_a_default (frappe_whatsapp.utils.test_conversation_webhook.TestAccountDefaultsExclusive.test_default_handover_from_both_flags_account_leaves_a_default)
+Regression: un-defaulting the old default via doc.save() re-entered ITS ... ok
+test_default_incoming_is_exclusive (frappe_whatsapp.utils.test_conversation_webhook.TestAccountDefaultsExclusive.test_default_incoming_is_exclusive) ... ok
+test_default_outgoing_is_exclusive (frappe_whatsapp.utils.test_conversation_webhook.TestAccountDefaultsExclusive.test_default_outgoing_is_exclusive) ... ok
+test_format_number_none_returns_none (frappe_whatsapp.utils.test_conversation_webhook.TestGetWhatsAppAccountResolution.test_format_number_none_returns_none) ... ok
+test_unmatched_phone_id_returns_none_not_default (frappe_whatsapp.utils.test_conversation_webhook.TestGetWhatsAppAccountResolution.test_unmatched_phone_id_returns_none_not_default) ... ok
+test_media_fetch_failure_still_creates_placeholder_row (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookMedia.test_media_fetch_failure_still_creates_placeholder_row) ... ok
+test_media_happy_path_attaches_file (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookMedia.test_media_happy_path_attaches_file) ... ok
+test_media_timeout_does_not_lose_sibling_text_in_batch (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookMedia.test_media_timeout_does_not_lose_sibling_text_in_batch) ... ok
+test_empty_entry_arrays_do_not_500 (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_empty_entry_arrays_do_not_500) ... ok
+test_failed_status_records_failure_reason (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_failed_status_records_failure_reason)
+A failed send must persist Meta's errors[] so the failure is diagnosable ... ok
+test_get_handshake_echoes_challenge_for_matching_account (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_get_handshake_echoes_challenge_for_matching_account) ... ok
+test_get_handshake_rejects_unknown_token (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_get_handshake_rejects_unknown_token) ... ok
+test_inbound_routes_to_matching_account_by_phone_id (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_inbound_routes_to_matching_account_by_phone_id) ... ok
+test_status_for_unknown_message_is_dropped_quietly (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_status_for_unknown_message_is_dropped_quietly) ... ok
+test_unknown_phone_id_creates_no_message_even_with_a_default (frappe_whatsapp.utils.test_conversation_webhook.TestWebhookRouting.test_unknown_phone_id_creates_no_message_even_with_a_default)
+Audit H2: an unmatched phone_id must NOT fall back to the default account ... ok
+test_webhook_creates_notification_log (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_creates_notification_log)
+Test that webhook POST creates a notification log entry. ... ok
+test_webhook_get_verification (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_get_verification)
+Test GET webhook verification. ... ok
+test_webhook_get_wrong_token (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_get_wrong_token)
+Test GET webhook with wrong verify token. ... ok
+test_webhook_post_button_message (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_button_message)
+Test POST webhook with button reply message. ... ok
+test_webhook_post_reaction_message (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_reaction_message)
+Test POST webhook with reaction message. ... ok
+test_webhook_post_reply_message (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_reply_message)
+Test POST webhook with reply context. ... ok
+test_webhook_post_status_update (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_status_update)
+Test POST webhook with status update (no messages). ... ok
+test_webhook_post_template_status_update (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_template_status_update)
+Template status updates have no metadata.phone_number_id; the handler ... ok
+test_webhook_post_text_message (frappe_whatsapp.utils.test_webhook.TestWebhookEndpoint.test_webhook_post_text_message)
+Test POST webhook with incoming text message. ... ok
+test_update_message_status (frappe_whatsapp.utils.test_webhook.TestWebhookHelpers.test_update_message_status)
+Test update_message_status updates WhatsApp Message status. ... ok
+test_update_message_status_without_conversation (frappe_whatsapp.utils.test_webhook.TestWebhookHelpers.test_update_message_status_without_conversation)
+Test update_message_status when no conversation ID. ... ok
+test_update_status_template_status (frappe_whatsapp.utils.test_webhook.TestWebhookHelpers.test_update_status_template_status)
+Test update_status routes to template status update. ... ok
+test_update_template_status (frappe_whatsapp.utils.test_webhook.TestWebhookHelpers.test_update_template_status)
+Test update_template_status updates template status via SQL. ... ok
+
+----------------------------------------------------------------------
+Ran 79 tests in 43.704s
+
+OK

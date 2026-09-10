@@ -19,6 +19,7 @@ All outbound HTTP is mocked (make_post_request is patched) so a downstream
 auto-reply can never reach live Meta with the broken lab token.
 """
 
+import json
 from unittest.mock import MagicMock, patch
 
 import frappe
@@ -50,6 +51,7 @@ def _account(name, phone_id, verify_token, incoming=0, outgoing=0):
 			"phone_id": phone_id,
 			"business_id": f"{phone_id}_biz",
 			"app_id": f"{phone_id}_app",
+			"app_secret": f"{phone_id}_secret",
 			"webhook_verify_token": verify_token,
 			"is_default_incoming": incoming,
 			"is_default_outgoing": outgoing,
@@ -100,13 +102,23 @@ class TestWebhookRouting(IntegrationTestCase):
 		self.addCleanup(p.stop)
 
 	def _post(self, payload):
-		req = MagicMock()
-		req.method = "POST"
-		frappe.local.form_dict = frappe._dict(payload)
-		with patch("frappe_whatsapp.utils.webhook.frappe.request", req):
-			from frappe_whatsapp.utils.webhook import webhook
-
-			return webhook()
+		from frappe_whatsapp.utils import signature, webhook
+		payload["object"] = "whatsapp_business_account"
+		phone = _PID_B
+		for entry in payload["entry"]:
+			for change in entry["changes"]:
+				change.setdefault("field", "messages")
+				value = change["value"]
+				value.setdefault("metadata", {"phone_number_id": _PID_B})
+				phone = value["metadata"]["phone_number_id"]
+				for contact in value.get("contacts", []):
+					contact.setdefault("wa_id", (value.get("messages") or [{}])[0].get("from"))
+			entry["id"] = f"{phone}_biz"
+		req = MagicMock(method="POST")
+		req.get_data.return_value = json.dumps(payload).encode()
+		req.headers = {"X-Hub-Signature-256": signature.expected_signature(f"{phone}_secret", req.get_data())}
+		with patch.object(frappe, "request", req):
+			return webhook.webhook()
 
 	def _get(self, verify_token, challenge="chal-123"):
 		req = MagicMock()
@@ -150,7 +162,8 @@ class TestWebhookRouting(IntegrationTestCase):
 		(that cross-attributes inbound to the wrong shop). Even with a default present,
 		the inbound is dropped."""
 		_account("Conv WH Default", "conv_wh_default_pid", "conv_wh_default_vt", incoming=1, outgoing=1)
-		self._post(_text_payload("phone_id_no_account", "5215551234599", "wamid.conv_wh_unknown"))
+		with self.assertRaises(frappe.PermissionError):
+			self._post(_text_payload("phone_id_no_account", "5215551234599", "wamid.conv_wh_unknown"))
 		self.assertFalse(
 			frappe.db.exists("WhatsApp Message", {"message_id": "wamid.conv_wh_unknown"})
 		)

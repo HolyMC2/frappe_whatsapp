@@ -1,132 +1,147 @@
-# Copyright (c) 2026, Marco and contributors
-# For license information, please see license.txt
+"""Authenticate raw Meta bytes, then bind every change to its signing app/account.
 
-"""X-Hub-Signature-256 verification for inbound Meta webhooks.
-
-WHY
----
-`utils.webhook.webhook()` is `allow_guest=True` and, until this module, did no
-authentication on POST at all — only the GET handshake checked a token. Anyone
-who could reach the URL could:
-
-  - insert arbitrary `WhatsApp Message` rows (fabricated customer conversations
-    that are indistinguishable, in the chat UI, from real ones),
-  - rewrite any template's status through `update_template_status`, which is a
-    raw SQL UPDATE keyed on an attacker-supplied id,
-  - flip message `status` / `failure_reason` through `update_message_status`,
-  - and spam `WhatsApp Notification Log`, which is written before any parsing.
-
-Meta signs every webhook body with HMAC-SHA256 under the app secret and sends
-it as `X-Hub-Signature-256: sha256=<hex>`. Verifying that is the fix.
-
-STAGED ROLLOUT — READ BEFORE CHANGING
--------------------------------------
-Turning this on unconditionally would have broken inbound WhatsApp on every
-tenant that has not yet copied its app secret in, including production. So the
-rule is deliberately keyed on configuration:
-
-  - NO account on the site has an `app_secret`  -> verification is SKIPPED and
-    a warning is logged. This is exactly today's behaviour, so deploying this
-    module changes nothing until an operator opts in.
-  - ANY account has an `app_secret`             -> a valid signature is
-    REQUIRED for every POST, site-wide.
-
-The all-or-nothing site-wide switch is intentional. Verifying per-account would
-mean parsing the untrusted body to pick an account BEFORE authenticating it,
-which lets an attacker choose which secret they are checked against — they
-would simply address the one account that has no secret set.
-
-THE BODY MUST BE THE RAW BYTES
-------------------------------
-The HMAC covers exactly what Meta transmitted. Re-serialising `form_dict` back
-to JSON produces different bytes (key order, separators, unicode escaping) and
-the signature will never match. Always hash `frappe.request.data`.
+There is deliberately no unsigned setup mode. Configure app_id, app_secret,
+business_id and phone_id before deploying this receiver. Demo ingestion uses a
+separate operator-only entry point; absence of an HTTP request grants no trust.
 """
-
 from __future__ import annotations
 
 import hashlib
 import hmac
-from typing import Optional
+import json
+import re
+from dataclasses import dataclass
 
 import frappe
 
 _HEADER = "X-Hub-Signature-256"
 _PREFIX = "sha256="
+MAX_BODY_BYTES = 2 * 1024 * 1024
+MAX_CHANGES = 1000
+
+
+@dataclass(frozen=True)
+class ScopedChange:
+    business_id: str
+    app_id: str
+    accounts: tuple[str, ...]
+    change: dict
+
+
+def _accounts():
+    # Read current credentials/configuration; cached documents could authorize a
+    # revoked app or an account transferred to another WABA.
+    return [frappe.get_doc("WhatsApp Account", name)
+            for name in frappe.get_all("WhatsApp Account", pluck="name")]
+
+
+def _secret(account):
+    try:
+        return account.get_password("app_secret", raise_exception=False) or ""
+    except Exception:
+        return ""
 
 
 def configured_secrets() -> list[str]:
-	"""Every non-empty app secret on the site.
-
-	Read through the doc so Frappe decrypts the Password field; `db.get_value`
-	returns the ciphertext placeholder instead of the secret.
-	"""
-	secrets = []
-	for name in frappe.get_all("WhatsApp Account", pluck="name"):
-		try:
-			value = frappe.get_cached_doc("WhatsApp Account", name).get_password(
-				"app_secret", raise_exception=False
-			)
-		except Exception:
-			value = None
-		if value:
-			secrets.append(value)
-	return secrets
+    """Compatibility diagnostic only. Never use a site-wide match for routing."""
+    return [secret for account in _accounts() if (secret := _secret(account))]
 
 
 def expected_signature(secret: str, body: bytes) -> str:
-	return _PREFIX + hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+    return _PREFIX + hmac.new(secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
 
 
-def is_valid(body: bytes, header: Optional[str], secrets: list[str]) -> bool:
-	"""Constant-time compare against every configured secret.
-
-	Multiple secrets are tried because a site can host several WABAs from
-	different Meta apps; a match on any of them proves the body came from a
-	party holding one of our secrets, which is the property we need. The
-	account the message belongs to is still resolved from `phone_number_id`
-	downstream, so this does not weaken routing.
-	"""
-	if not header:
-		return False
-	for secret in secrets:
-		if hmac.compare_digest(expected_signature(secret, body), header):
-			return True
-	return False
+def is_valid(body: bytes, header: str | None, secrets: list[str]) -> bool:
+    if not isinstance(header, str) or not re.fullmatch(r"sha256=[0-9a-f]{64}", header):
+        return False
+    return any(hmac.compare_digest(expected_signature(secret, body), header) for secret in secrets)
 
 
-def verify_request() -> None:
-	"""Authenticate the current inbound webhook POST, or throw.
+def _deny():
+    frappe.throw(frappe._("Invalid webhook signature or account scope."), frappe.PermissionError)
 
-	No-op when there is no HTTP request in scope. That covers the in-process
-	caller (`frappe_whatsapp.demo` pushes synthetic envelopes through the same
-	handler on purpose, so there is one ingestion path rather than two) — and
-	that caller is separately gated on System Manager, so it is not a hole a
-	guest can reach.
-	"""
-	request = getattr(frappe, "request", None)
-	if request is None:
-		return
 
-	secrets = configured_secrets()
-	if not secrets:
-		# Staged rollout: nothing configured yet, so behave as before. Logged so
-		# the exposure is visible rather than silently permanent.
-		frappe.logger("frappe_whatsapp").warning(
-			"Inbound webhook accepted WITHOUT signature verification: no WhatsApp "
-			"Account has an app_secret set. Set one to enforce X-Hub-Signature-256."
-		)
-		return
+def _object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
 
-	body = request.get_data() or b""
-	header = request.headers.get(_HEADER)
-	if is_valid(body, header, secrets):
-		return
 
-	# Deliberately terse and identical for missing vs wrong signatures: a
-	# detailed reason tells an attacker which half they got right.
-	frappe.throw(
-		frappe._("Invalid webhook signature."),
-		frappe.PermissionError,
-		title=frappe._("Rejected"),
-	)
+def verify_request() -> list[ScopedChange]:
+    """Return only changes authenticated and authorized by the raw HTTP body.
+
+    Validate the entire envelope before the caller can write even its first row.
+    A known app's signature cannot authorize an unknown WABA, a different app's
+    phone, a disabled account, or a Demo account.
+    """
+    request = getattr(frappe, "request", None)
+    if request is None or request.method != "POST":
+        _deny()
+    body = request.get_data() or b""
+    if not isinstance(body, bytes) or not body or len(body) > MAX_BODY_BYTES:
+        _deny()
+    accounts = _accounts()
+    active = [a for a in accounts if a.get("status") == "Active"
+              and (a.get("mode") or "Live") == "Live" and a.get("app_id")]
+    apps = set()
+    for candidate in active:
+        secret = _secret(candidate)
+        if secret and is_valid(body, request.headers.get(_HEADER), [secret]):
+            apps.add(str(candidate.app_id))
+    # Secret reuse across different app IDs is an ambiguous trust configuration.
+    if len(apps) != 1:
+        _deny()
+    try:
+        data = json.loads(body, object_pairs_hook=_object)
+    except (ValueError, UnicodeError):
+        _deny()
+    return scope_payload(data, active, apps.pop())
+
+
+def scope_payload(data: dict, accounts: list, app_id: str) -> list[ScopedChange]:
+    """Pure envelope validation/routing, also reused by the gated Demo path."""
+    if not isinstance(data, dict) or data.get("object") != "whatsapp_business_account":
+        _deny()
+    entries = data.get("entry")
+    if not isinstance(entries, list) or len(entries) > MAX_CHANGES:
+        _deny()
+    result = []
+    for entry in entries:
+        if not isinstance(entry, dict) or not isinstance(entry.get("id"), str) or not entry["id"]:
+            _deny()
+        candidates = [a for a in accounts if str(a.get("app_id")) == app_id
+                      and isinstance(a.get("business_id"), str) and a.get("business_id")
+                      and a.get("business_id") == entry["id"]]
+        if not candidates or not isinstance(entry.get("changes"), list):
+            _deny()
+        for change in entry["changes"]:
+            if not isinstance(change, dict) or not isinstance(change.get("field"), str):
+                _deny()
+            value = change.get("value")
+            if not isinstance(value, dict):
+                _deny()
+            metadata = value.get("metadata") or {}
+            if not isinstance(metadata, dict):
+                _deny()
+            phone = metadata.get("phone_number_id")
+            selected = candidates
+            if phone is not None:
+                if not isinstance(phone, str) or not phone:
+                    _deny()
+                selected = [a for a in candidates if a.get("phone_id") == phone]
+                if len(selected) != 1:
+                    _deny()
+            elif change["field"] in {"messages", "smb_message_echoes", "history", "smb_app_state_sync"} or "messages" in value or "statuses" in value:
+                _deny()
+            for key in ("messages", "statuses", "contacts"):
+                if key in value and (not isinstance(value[key], list)
+                                     or any(not isinstance(v, dict) for v in value[key])):
+                    _deny()
+            result.append(ScopedChange(entry["id"], app_id,
+                                       tuple(a.name for a in selected), change))
+            if len(result) > MAX_CHANGES:
+                _deny()
+    return result

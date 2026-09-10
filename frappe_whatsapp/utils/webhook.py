@@ -38,53 +38,26 @@ def get():
 	return Response(hub_challenge, status=200)
 
 def post():
-	"""Post."""
-	# Authenticate BEFORE anything else. The Notification Log insert below is
-	# the first write and lands ahead of any parsing, so verifying later would
-	# still let an unauthenticated caller fill that table. See utils.signature:
-	# no-op until an app_secret is configured, mandatory site-wide once one is.
-	signature.verify_request()
+	"""Authenticate and account-scope the entire batch before any write."""
+	for scoped in signature.verify_request():
+		process_change(scoped)
 
-	data = frappe.local.form_dict
+
+def process_change(scoped):
+	"""Internal consumer. Only called after full-envelope authentication."""
+	value = scoped.change["value"]
+	messages = value.get("messages", [])
+	whatsapp_account = frappe.get_doc("WhatsApp Account", scoped.accounts[0])
+	profiles = {c.get("wa_id"): (c.get("profile") or {}).get("name")
+	            for c in value.get("contacts", [])}
 	frappe.get_doc({
-		"doctype": "WhatsApp Notification Log",
-		"template": "Webhook",
-		"meta_data": json.dumps(data)
+		"doctype": "WhatsApp Notification Log", "template": "Webhook",
+		"meta_data": json.dumps(scoped.change),
 	}).insert(ignore_permissions=True)
-
-	messages = []
-	phone_id = None
-	try:
-		messages = data["entry"][0]["changes"][0]["value"].get("messages", [])
-		phone_id = data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("metadata", {}).get("phone_number_id")
-	except KeyError:
-		messages = data["entry"]["changes"][0]["value"].get("messages", [])
-	except IndexError:
-		# empty entry/changes array — nothing to ingest
-		pass
-	sender_profile_name = next(
-		(
-			contact.get("profile", {}).get("name")
-			for entry in data.get("entry", [])
-			for change in entry.get("changes", [])
-			for contact in change.get("value", {}).get("contacts", [])
-		),
-		None,
-	)
-
-	whatsapp_account = get_whatsapp_account(phone_id) if phone_id else None
-
-	# Only `messages` events carry `metadata.phone_number_id`. Status-change
-	# events (`message_template_status_update`, message status callbacks) have
-	# no metadata, so `phone_id` is None and `whatsapp_account` is also None
-	# for them by design. Gating the entire handler on `whatsapp_account`
-	# silently drops every template-status update; gate only the message-
-	# ingestion branch instead.
-	if messages and not whatsapp_account:
-		return
 
 	if messages:
 		for message in messages:
+			sender_profile_name = profiles.get(message.get('from'))
 			message_type = message['type']
 			is_reply = True if message.get('context') and 'forwarded' not in message.get('context') else False
 			reply_to_message_id = message['context']['id'] if is_reply else None
@@ -310,7 +283,7 @@ def post():
 						and frappe.get_meta("WhatsApp Message").has_field("ctwa_source_id"):
 					frappe.db.set_value(
 						"WhatsApp Message",
-						{"message_id": message["id"]},
+						{"message_id": message["id"], "whatsapp_account": whatsapp_account.name},
 						{
 							"ctwa_source_id": referral.get("source_id"),
 							"ctwa_clid": referral.get("ctwa_clid"),
@@ -320,42 +293,35 @@ def post():
 			except Exception:
 				frappe.log_error("CTWA referral capture failed", frappe.get_traceback())
 
-	else:
-		changes = None
-		try:
-			changes = data["entry"][0]["changes"][0]
-		except KeyError:
-			changes = data["entry"]["changes"][0]
-		except IndexError:
-			# empty entry/changes array — no status to update
-			return
-		update_status(changes)
-	return
+	update_status(scoped.change, scoped.accounts)
 
-def update_status(data):
+def update_status(data, accounts):
 	"""Update status hook."""
 	if data.get("field") == "message_template_status_update":
-		update_template_status(data['value'])
+		update_template_status(data['value'], accounts)
 
 	elif data.get("field") == "messages":
-		update_message_status(data['value'])
+		update_message_status(data['value'], accounts)
 
-def update_template_status(data):
-	"""Update template status."""
-	frappe.db.sql(
-		"""UPDATE `tabWhatsApp Templates`
-		SET status = %(event)s
-		WHERE id = %(message_template_id)s""",
-		data
-	)
+def update_template_status(data, accounts):
+	"""Template IDs are scoped to this authenticated WABA's accounts."""
+	for name in frappe.get_all("WhatsApp Templates", filters={
+		"id": data.get("message_template_id"), "whatsapp_account": ["in", accounts],
+	}, pluck="name"):
+		frappe.db.set_value("WhatsApp Templates", name, "status", data.get("event"))
 
-def update_message_status(data):
-	"""Update message status."""
-	entry = data['statuses'][0]
+
+def update_message_status(data, accounts):
+	"""Process every status, scoped to the authenticated phone account."""
+	for entry in data.get("statuses", []):
+		_apply_message_status(entry, accounts)
+
+
+def _apply_message_status(entry, accounts):
 	id = entry['id']
 	status = entry['status']
 	conversation = entry.get('conversation', {}).get('id')
-	name = frappe.db.get_value("WhatsApp Message", filters={"message_id": id})
+	name = frappe.db.get_value("WhatsApp Message", filters={"message_id": id, "whatsapp_account": ["in", accounts], "type": "Outgoing"})
 	if not name:
 		# A status callback for a message this DB never stored (console/API
 		# sends, other integrations on the same number). Crashing here 500s

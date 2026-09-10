@@ -66,7 +66,7 @@ class TestWebhookHelpers(IntegrationTestCase):
             }
         }
         # Should not raise
-        update_status(data)
+        update_status(data, ("Test WA Webhook Account",))
 
     def test_update_message_status(self):
         """Test update_message_status updates WhatsApp Message status."""
@@ -91,7 +91,7 @@ class TestWebhookHelpers(IntegrationTestCase):
                 "conversation": {"id": "conv_123"}
             }]
         }
-        update_message_status(data)
+        update_message_status(data, ("Test WA Webhook Account",))
 
         msg.reload()
         self.assertEqual(msg.status, "delivered")
@@ -118,7 +118,7 @@ class TestWebhookHelpers(IntegrationTestCase):
                 "status": "sent",
             }]
         }
-        update_message_status(data)
+        update_message_status(data, ("Test WA Webhook Account",))
 
         msg.reload()
         self.assertEqual(msg.status, "sent")
@@ -147,7 +147,7 @@ class TestWebhookHelpers(IntegrationTestCase):
             "event": "APPROVED",
             "message_template_id": "webhook_tmpl_id_123",
         }
-        update_template_status(data)
+        update_template_status(data, ("Test WA Webhook Account",))
 
         status = frappe.db.get_value("WhatsApp Templates", {"id": "webhook_tmpl_id_123"}, "status")
         self.assertEqual(status, "APPROVED")
@@ -183,6 +183,7 @@ class TestWebhookEndpoint(IntegrationTestCase):
         # Set password within each test's transaction scope
         from frappe.utils.password import set_encrypted_password
         set_encrypted_password("WhatsApp Account", "Test WA Webhook EP Account", "ep_token", "token")
+        set_encrypted_password("WhatsApp Account", "Test WA Webhook EP Account", "ep-secret", "app_secret")
         # Clear ALL defaults then set ours (db.set_value bypasses on_update hooks)
         frappe.db.sql("UPDATE `tabWhatsApp Account` SET is_default_outgoing=0, is_default_incoming=0")
         frappe.db.set_value("WhatsApp Account", "Test WA Webhook EP Account", {
@@ -200,10 +201,25 @@ class TestWebhookEndpoint(IntegrationTestCase):
         frappe.db.commit()  # nosemgrep: frappe-manual-commit -- test fixture must be visible to later queries
 
     def _make_mock_request(self, method="GET"):
-        """Create a mock request object."""
-        mock_request = MagicMock()
-        mock_request.method = method
-        return mock_request
+        """Sign the completed fixture envelope as an actual Meta POST."""
+        from frappe_whatsapp.utils.signature import expected_signature
+        def raw():
+            data = json.loads(json.dumps(frappe.local.form_dict))
+            data["object"] = "whatsapp_business_account"
+            for entry in data.get("entry", []):
+                entry["id"] = "webhook_ep_business_id"
+                for change in entry["changes"]:
+                    change.setdefault("field", "messages")
+                    value = change["value"]
+                    if change["field"] == "messages":
+                        value.setdefault("metadata", {"phone_number_id": "webhook_ep_phone_id"})
+                    for contact in value.get("contacts", []):
+                        contact.setdefault("wa_id", (value.get("messages") or [{}])[0].get("from"))
+            return json.dumps(data).encode()
+        req = MagicMock(method=method)
+        req.get_data.side_effect = raw
+        req.headers.get.side_effect = lambda key: expected_signature("ep-secret", raw())
+        return req
 
     def test_webhook_get_verification(self):
         """Test GET webhook verification."""

@@ -68,7 +68,7 @@
    "fieldname": "app_secret",
    "fieldtype": "Password",
    "label": "App Secret",
-   "description": "Meta App Secret, used to verify the X-Hub-Signature-256 header on inbound webhooks. Meta > App > Settings > Basic > App Secret. LEAVE EMPTY to keep the current unverified behaviour; the moment ANY account on the site sets one, unsigned or wrongly-signed webhook POSTs are rejected site-wide."
+   "description": "Meta App Secret, used to verify the X-Hub-Signature-256 header on inbound webhooks. Meta > App > Settings > Basic > App Secret. Required for live inbound webhooks. Configure the matching App ID, Business ID and Phone ID before enabling the receiver; unsigned and out-of-scope deliveries are rejected."
   },
   {
    "fieldname": "column_break_byyq",
