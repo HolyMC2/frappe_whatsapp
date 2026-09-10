@@ -1,0 +1,143 @@
+{
+ "doctype": "DocType",
+ "name": "Meta Webhook Receipt",
+ "module": "Frappe Whatsapp",
+ "autoname": "field:event_key",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "event_key",
+   "fieldtype": "Data",
+   "label": "Event Key",
+   "read_only": 1,
+   "unique": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "provider",
+   "fieldtype": "Select",
+   "label": "Provider",
+   "read_only": 1,
+   "options": "WhatsApp\nMessenger\nInstagram",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "account_id",
+   "fieldtype": "Data",
+   "label": "Account Id",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "app_id",
+   "fieldtype": "Data",
+   "label": "App Id",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "event_type",
+   "fieldtype": "Data",
+   "label": "Event Type",
+   "read_only": 1,
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "event_id",
+   "fieldtype": "Small Text",
+   "label": "Event Id",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "payload",
+   "fieldtype": "Long Text",
+   "label": "Payload",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "payload_hash",
+   "fieldtype": "Data",
+   "label": "Payload Hash",
+   "read_only": 1,
+   "reqd": 1
+  },
+  {
+   "fieldname": "state",
+   "fieldtype": "Select",
+   "label": "State",
+   "read_only": 1,
+   "options": "Pending\nProcessing\nProcessed\nFailed\nIgnored",
+   "default": "Pending",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "attempts",
+   "fieldtype": "Int",
+   "label": "Attempts",
+   "read_only": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "received_at",
+   "fieldtype": "Datetime",
+   "label": "Received At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "processed_at",
+   "fieldtype": "Datetime",
+   "label": "Processed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_attempt_at",
+   "fieldtype": "Datetime",
+   "label": "Next Attempt At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lease_until",
+   "fieldtype": "Datetime",
+   "label": "Lease Until",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reason_code",
+   "fieldtype": "Data",
+   "label": "Reason Code",
+   "read_only": 1
+  }
+ ],
+ "field_order": [
+  "event_key",
+  "provider",
+  "account_id",
+  "app_id",
+  "event_type",
+  "event_id",
+  "payload",
+  "payload_hash",
+  "state",
+  "attempts",
+  "received_at",
+  "processed_at",
+  "next_attempt_at",
+  "lease_until",
+  "reason_code"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "report": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "track_changes": 0,
+ "allow_rename": 0
+}
