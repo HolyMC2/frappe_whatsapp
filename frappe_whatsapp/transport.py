@@ -227,6 +227,14 @@ class DemoResponse:
 # --------------------------------------------------------------------------
 
 
+def _guard_inbound(method):
+	# Receipt leases can be recovered after a crash. Only reads may be replayed;
+	# a provider submission must enter the separate durable intent lifecycle.
+	if (frappe.flags.get("meta_webhook_receipt") or frappe.flags.get("meta_webhook_replay")) and method.upper() not in {"GET", "HEAD"}:
+		from frappe_whatsapp.webhook_receipts import ReceiptError
+		raise ReceiptError("outbound_intent_required")
+
+
 def _guard_live(account_doc, url: str) -> None:
 	"""Refuse a live call that cannot possibly succeed.
 
@@ -269,6 +277,7 @@ def api(
 	data: Any = None,
 ) -> dict:
 	"""Graph call returning a parsed dict. Replaces make_post_request/make_request."""
+	_guard_inbound(method or "POST")
 	if is_demo(account):
 		_log_demo(account, method, url, data)
 		return _demo_payload(method, url, data)
@@ -282,6 +291,7 @@ def api(
 
 def raw(account: Any, method: str, url: str, **kwargs):
 	"""Graph call returning a Response-like. Replaces direct requests.* usage."""
+	_guard_inbound(method or "GET")
 	if is_demo(account):
 		_log_demo(account, method, url, kwargs.get("data") or kwargs.get("json"))
 		return DemoResponse(_demo_payload(method, url, kwargs.get("data") or kwargs.get("json")))

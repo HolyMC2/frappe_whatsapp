@@ -78,7 +78,7 @@ def verify_request() -> list[ScopedChange]:
     phone, a disabled account, or a Demo account.
     """
     request = getattr(frappe, "request", None)
-    if request is None or request.method != "POST":
+    if not request or request.method != "POST":
         _deny()
     body = request.get_data() or b""
     if not isinstance(body, bytes) or not body or len(body) > MAX_BODY_BYTES:

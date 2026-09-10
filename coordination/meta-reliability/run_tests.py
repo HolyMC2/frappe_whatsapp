@@ -6,7 +6,7 @@ from unittest.mock import patch
 sys.path.insert(0, '/tmp/meta-wa-20260910')
 os.chdir('/home/frappe/frappe-bench/sites')
 import frappe
-frappe.init(site='doco-mirror.lab.xoloitzcuintles.com')
+frappe.init(site=os.environ.get('META_LAB_SITE', 'doco-mirror.lab.xoloitzcuintles.com'))
 frappe.connect()
 frappe.set_user('Administrator')
 frappe.local.conf = frappe._dict(frappe.local.conf)

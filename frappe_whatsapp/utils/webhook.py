@@ -39,8 +39,60 @@ def get():
 
 def post():
 	"""Authenticate and account-scope the entire batch before any write."""
-	for scoped in signature.verify_request():
+	from frappe_whatsapp.webhook_receipts import record_events
+	scopes = signature.verify_request()
+	return record_events([event for scoped in scopes for event in receipt_events(scoped)])
+
+
+def receipt_events(scoped):
+	"""Split every message/status into a stable, account-scoped receipt identity."""
+	from frappe_whatsapp.webhook_receipts import canonical, digest, ReceiptError
+	value = scoped.change["value"]
+	field = scoped.change["field"]
+	phone = (value.get("metadata") or {}).get("phone_number_id")
+	base = {"provider": "WhatsApp", "account_id": phone or scoped.business_id,
+	        "app_id": scoped.app_id}
+	def event(kind, identity, change):
+		return {**base, "event_type": kind, "event_id": identity, "payload": {
+			"business_id": scoped.business_id, "change": change}}
+	if field == "messages":
+		for message in value.get("messages", []):
+			if not isinstance(message.get("id"), str) or not message["id"]:
+				raise ReceiptError("message_id_missing")
+			atom = {k: v for k, v in value.items() if k not in {"messages", "statuses", "contacts"}}
+			atom["contacts"] = [c for c in value.get("contacts", []) if c.get("wa_id") == message.get("from")]
+			atom["messages"] = [message]
+			yield event("message", message["id"], {"field": field, "value": atom})
+		for status in value.get("statuses", []):
+			if not status.get("id") or not status.get("status"):
+				raise ReceiptError("status_identity_missing")
+			atom = {k: v for k, v in value.items() if k not in {"messages", "statuses", "contacts"}}
+			atom["statuses"] = [status]
+			yield event("status", digest([status["id"], status["status"], status.get("timestamp")]),
+			            {"field": field, "value": atom})
+		if value.get("messages") or value.get("statuses"):
+			return
+	yield event(field, digest(value), scoped.change)
+
+
+def consume_receipt(receipt):
+	"""Recheck current account scope; consume only this durable atom."""
+	from frappe_whatsapp.webhook_receipts import ReceiptError
+	payload = json.loads(receipt.payload)
+	accounts = [a for a in signature._accounts() if a.get("status") == "Active"
+	            and (a.get("mode") or "Live") == "Live" and a.get("app_id") == receipt.app_id]
+	if not any(signature._secret(a) for a in accounts):
+		raise ReceiptError("account_unavailable")
+	try:
+		scopes = signature.scope_payload({"object": "whatsapp_business_account", "entry": [{
+			"id": payload["business_id"], "changes": [payload["change"]]}]}, accounts, receipt.app_id)
+	except frappe.PermissionError:
+		raise ReceiptError("account_scope_revoked") from None
+	if payload["change"]["field"] not in {"messages", "message_template_status_update"}:
+		return {"state": "Ignored", "reason_code": "unsupported_event"}
+	for scoped in scopes:
 		process_change(scoped)
+	return {"state": "Processed"}
 
 
 def process_change(scoped):
@@ -158,7 +210,8 @@ def process_change(scoped):
 							"message_id": message['id'],
 							"flow_response": flow_response,
 							"whatsapp_account": whatsapp_account.name
-						}
+						},
+						after_commit=True,
 					)
 			# NEW: Handle Shopping Cart / Orders from MPM
 			elif message_type == 'order':
@@ -232,8 +285,11 @@ def process_change(scoped):
 					).save(ignore_permissions=True)
 
 					message_doc.attach = file.file_url
-					message_doc.save()
+					message_doc.save(ignore_permissions=True)
 				except Exception:
+					if frappe.flags.get("meta_webhook_receipt"):
+						from frappe_whatsapp.webhook_receipts import ReceiptError
+						raise ReceiptError("media_fetch_failed") from None
 					frappe.log_error(
 						title="WhatsApp inbound media fetch failed",
 						message=frappe.get_traceback(),
@@ -321,15 +377,31 @@ def _apply_message_status(entry, accounts):
 	id = entry['id']
 	status = entry['status']
 	conversation = entry.get('conversation', {}).get('id')
-	name = frappe.db.get_value("WhatsApp Message", filters={"message_id": id, "whatsapp_account": ["in", accounts], "type": "Outgoing"})
+	name = frappe.db.get_value("WhatsApp Message", filters={"message_id": id, "whatsapp_account": ["in", accounts], "type": "Outgoing"}, for_update=True)
 	if not name:
+		if frappe.flags.get("meta_webhook_receipt"):
+			from frappe_whatsapp.webhook_receipts import ReceiptError
+			raise ReceiptError("message_not_found")
 		# A status callback for a message this DB never stored (console/API
 		# sends, other integrations on the same number). Crashing here 500s
 		# the webhook and makes Meta retry-storm — drop it quietly.
 		return
 
-	doc = frappe.get_doc("WhatsApp Message", name)
+	doc = frappe.get_doc("WhatsApp Message", name, for_update=True)
+	# Separate receipt jobs can reach the same message out of order. Serialize
+	# that aggregate and never replace delivery/read evidence with an older state.
+	rank = {"sent": 1, "delivered": 2, "read": 3}
+	current = (doc.status or "").lower()
+	if status not in {*rank, "failed"}:
+		from frappe_whatsapp.webhook_receipts import ReceiptError
+		raise ReceiptError("unsupported_status")
+	if rank.get(current, 0) > rank.get(status, 0) and current in {"delivered", "read"}:
+		return
+	if current == "failed" and status == "sent":
+		return
 	doc.status = status
+	if status in {"delivered", "read"}:
+		doc.failure_reason = None
 	if conversation:
 		doc.conversation_id = conversation
 	# Meta explains async failures (media fetch, re-engagement window, policy)

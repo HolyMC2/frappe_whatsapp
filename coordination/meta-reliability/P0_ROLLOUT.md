@@ -12,7 +12,7 @@ Demo simulation uses the same scoped consumer behind repeated System Manager and
 
 [Read-only metadata](production-readonly-20260910.json), observed 03:38:56 UTC, confirms both Active WhatsApp accounts have **no app secret**. Both map to app `2082376078930469` and WABA `2954965221375122`; phone IDs differ. The Page still has seven subscriptions and lacks `mention`, receipt and handover fields. Instagram account subscription inspection returned error 100; delivery is unverified.
 
-[Second app inventory](second-app-readonly.json) identifies the second app as **Doco Chatwoot Connector** (`1418834030282521`); the configured app is **erpnext connector**. Its presence alone establishes neither operator ownership nor permission to detach it. Keep both attachments. No production event payload/customer messages were read. Graph calls were GET-only with DB session read-only; no secrets were emitted.
+[Second app inventory](second-app-readonly.json) identifies the second app as **Doco Chatwoot Connector** (`1418834030282521`); the configured app is **erpnext connector**. The user subsequently confirmed Chatwoot is retired. Prepare removal scoped to that retired app/WABA attachment after callback/dependency checks; executing the production mutation still requires rollout authorization. Both attachments remain unchanged. No production event payload/customer messages were read. Graph calls were GET-only with DB session read-only; no secrets were emitted.
 
 ## Controlled activation sequence (requires separate production authorization)
 
@@ -24,6 +24,20 @@ Demo simulation uses the same scoped consumer behind repeated System Manager and
 6. Watch rejection/enrichment/processing counts. Actual delivery proof, production config approval and the rollout receipt are unresolved gates. Do not expand subscriptions or bots on the strength of local tests.
 
 Rollback: retain the configured secrets and this strict boundary, or keep the callback unavailable while restoring a reviewed compatible build. Returning to the old no-secret acceptance path is not an acceptable security rollback. Restoring code cannot revoke external effects already submitted. Later receipt-schema rollout has a separate compatibility/rollback gate.
+
+### Retired Chatwoot removal preparation
+
+Snapshot the WABA subscriptions and exact callback overrides first. Verify the
+credential used for removal belongs to retired app `1418834030282521`, with the
+required WABA access; refuse any removal attempted with active ERPNext app
+`2082376078930469` credentials. Meta's [current Business SDK WABA edge](https://github.com/facebook/facebook-python-business-sdk/blob/main/facebook_business/adobjects/whatsappbusinessaccount.py)
+defines DELETE `/subscribed_apps` without an `app_id` selector, so adding an
+arbitrary app ID to a request is not proof that the retired attachment is targeted.
+If the retired app cannot be addressed with a verified credential, prepare the
+equivalent reviewed Business Manager operation instead. During the separately
+authorized window remove only that attachment, then GET the subscription list
+and verify the active app, phone mappings and callback remain present. No removal
+request was executed here.
 
 ## Local evidence
 

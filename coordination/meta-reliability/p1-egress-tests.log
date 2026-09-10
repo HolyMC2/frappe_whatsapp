@@ -1,0 +1,22 @@
+test_demo_generic_get_has_media_keys (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_generic_get_has_media_keys)
+utils.webhook reads media_data["url"] unconditionally. ... ok
+test_demo_message_response_is_meta_shaped (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_message_response_is_meta_shaped) ... ok
+test_demo_never_performs_http (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_never_performs_http)
+The whole point. If either of these is called, a prospect's phone ... ok
+test_demo_raw_duck_types_response (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_raw_duck_types_response)
+Call sites converted from requests.* use these four members. ... ok
+test_demo_template_create_is_approved (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestDemoModeSuppressesEgress.test_demo_template_create_is_approved)
+A demo tenant must end up with usable templates: taller's ... ok
+test_no_direct_meta_egress_outside_transport (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestEgressInvariant.test_no_direct_meta_egress_outside_transport) ... ok
+test_default_mode_is_live (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestLiveMode.test_default_mode_is_live)
+Existing accounts predate the field. Defaulting to Demo would ... ok
+test_live_still_calls_through (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestLiveMode.test_live_still_calls_through) ... ok
+test_live_without_token_fails_closed (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestLiveMode.test_live_without_token_fails_closed)
+Previously this fired the request and returned an opaque Meta 401. ... ok
+test_receipt_and_replay_cannot_submit_or_mutate (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestReceiptEgress.test_receipt_and_replay_cannot_submit_or_mutate) ... ok
+test_receipt_may_fetch_media (frappe_whatsapp.frappe_whatsapp.tests.test_transport.TestReceiptEgress.test_receipt_may_fetch_media) ... ok
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.437s
+
+OK

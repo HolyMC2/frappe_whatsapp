@@ -105,6 +105,28 @@ class TestDemoModeSuppressesEgress(unittest.TestCase):
 		self.assertIn("mime_type", out)
 
 
+class TestReceiptEgress(unittest.TestCase):
+	def test_receipt_and_replay_cannot_submit_or_mutate(self):
+		from frappe_whatsapp.webhook_receipts import ReceiptError
+		for flag in ("meta_webhook_receipt", "meta_webhook_replay"):
+			with patch.object(frappe, "flags", frappe._dict({flag: True})), \
+				patch.object(transport, "is_demo") as resolve:
+				for entry in (transport.api, transport.raw):
+					for method in ("POST", "DELETE", "PATCH", "PUT"):
+						with self.assertRaises(ReceiptError) as failure:
+							entry(None, method, _GRAPH)
+						self.assertEqual(failure.exception.reason, "outbound_intent_required")
+				resolve.assert_not_called()
+
+	def test_receipt_may_fetch_media(self):
+		with patch.object(frappe, "flags", frappe._dict(meta_webhook_receipt="fictional")), \
+			patch.object(transport, "is_demo", return_value=False), \
+			patch.object(transport, "resolve_account", return_value=None), \
+			patch.object(transport.requests, "request", return_value="media") as request:
+			self.assertEqual(transport.raw(None, "GET", _GRAPH), "media")
+			request.assert_called_once()
+
+
 class TestLiveMode(unittest.TestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")

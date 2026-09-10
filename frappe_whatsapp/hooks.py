@@ -115,6 +115,7 @@ app_include_js = "/assets/frappe_whatsapp/js/frappe_whatsapp.js"
 # ---------------
 
 scheduler_events = {
+    "cron": {"* * * * *": ["frappe_whatsapp.webhook_receipts.sweep"]},
     "all": [
         "frappe_whatsapp.utils.trigger_whatsapp_notifications_all"
     ],

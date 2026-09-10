@@ -1,0 +1,2 @@
+PASS actual signed Guest HTTP: five durable atoms, no premature message or media work
+PASS actual Guest consumer: text+media stored, read status monotonic, no submission, no duplicate fetch/effect

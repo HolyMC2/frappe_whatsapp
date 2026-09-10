@@ -184,6 +184,19 @@ class TestWebhookEndpoint(IntegrationTestCase):
         from frappe.utils.password import set_encrypted_password
         set_encrypted_password("WhatsApp Account", "Test WA Webhook EP Account", "ep_token", "token")
         set_encrypted_password("WhatsApp Account", "Test WA Webhook EP Account", "ep-secret", "app_secret")
+        # Exercise existing consumer behavior through a signed HTTP envelope;
+        # the dedicated receipt suite separately proves persistence/worker faults.
+        def consume(events):
+            from frappe_whatsapp.utils import signature, webhook
+            accounts = signature._accounts()
+            for event in events:
+                for scoped in signature.scope_payload({"object": "whatsapp_business_account", "entry": [{
+                    "id": event["payload"]["business_id"], "changes": [event["payload"]["change"]]}]},
+                    accounts, event["app_id"]):
+                    webhook.process_change(scoped)
+        pump = patch("frappe_whatsapp.webhook_receipts.record_events", side_effect=consume)
+        pump.start()
+        self.addCleanup(pump.stop)
         # Clear ALL defaults then set ours (db.set_value bypasses on_update hooks)
         frappe.db.sql("UPDATE `tabWhatsApp Account` SET is_default_outgoing=0, is_default_incoming=0")
         frappe.db.set_value("WhatsApp Account", "Test WA Webhook EP Account", {

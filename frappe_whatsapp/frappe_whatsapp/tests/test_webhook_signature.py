@@ -45,7 +45,7 @@ class TestSignature(unittest.TestCase):
     def rejected(self, **kwargs):
         # process_change is the first possible domain/log write. Authentication
         # must finish across the WHOLE batch before it can be invoked once.
-        with patch.object(webhook, "process_change") as process:
+        with patch("frappe_whatsapp.webhook_receipts.record_events") as process:
             with self.assertRaises(frappe.PermissionError):
                 self.verify(consume=True, **kwargs)
             process.assert_not_called()
@@ -82,10 +82,11 @@ class TestSignature(unittest.TestCase):
         data = payload()
         raw = json.dumps(data, indent=3).encode()
         with patch.object(frappe.local, "form_dict", payload("phone-b", "waba-b")), \
-                patch.object(webhook, "process_change") as process:
+                patch("frappe_whatsapp.webhook_receipts.record_events") as process:
             self.verify(raw=raw, consume=True)
-            self.assertEqual(process.call_args.args[0].accounts, ("a",))
-            self.assertEqual(process.call_args.args[0].change, data["entry"][0]["changes"][0])
+            self.assertEqual(process.call_args.args[0][0]["account_id"], "phone-a")
+            self.assertEqual(process.call_args.args[0][0]["payload"]["change"]["value"]["messages"],
+                             data["entry"][0]["changes"][0]["value"]["messages"])
 
     def test_foreign_phone_denied(self):
         self.rejected(data=payload("foreign"))

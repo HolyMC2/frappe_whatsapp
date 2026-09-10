@@ -1,0 +1,45 @@
+test_account_app_and_provider_namespaces_are_distinct (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_account_app_and_provider_namespaces_are_distinct) ... ok
+test_all_message_and_status_atoms_are_retained (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_all_message_and_status_atoms_are_retained) ... ok
+test_duplicate_preserves_earlier_caller_work (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_duplicate_preserves_earlier_caller_work) ... ok
+test_enqueue_failure_retains_pending (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_enqueue_failure_retains_pending) ... ok
+test_generic_update_cannot_rewrite_receipt (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_generic_update_cannot_rewrite_receipt) ... ok
+test_guest_and_sales_roles_cannot_read_receipt (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_guest_and_sales_roles_cannot_read_receipt) ... ok
+test_invalid_later_event_does_not_insert_earlier (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_invalid_later_event_does_not_insert_earlier) ... ok
+test_record_never_commits_and_does_not_enqueue_before_commit (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_record_never_commits_and_does_not_enqueue_before_commit) ... ok
+test_reordered_batch_converges (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_reordered_batch_converges) ... ok
+test_replay_preserves_original_evidence (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_replay_preserves_original_evidence) ... ok
+test_schema_unavailable_never_falls_back_to_volatile_ingest (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_schema_unavailable_never_falls_back_to_volatile_ingest) ... ok
+test_worker_accepts_frappe_unbound_request_proxy (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_worker_accepts_frappe_unbound_request_proxy) ... ok
+test_worker_refuses_http_transaction_context (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_receipts.TestWebhookReceipts.test_worker_refuses_http_transaction_context) ... ok
+test_ambiguous_app_secret_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_ambiguous_app_secret_denied) ... ok
+test_disabled_and_demo_accounts_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_disabled_and_demo_accounts_denied) ... ok
+test_duplicate_keys_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_duplicate_keys_denied) ... ok
+test_foreign_phone_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_foreign_phone_denied) ... ok
+test_foreign_waba_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_foreign_waba_denied) ... ok
+test_invalid_json_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_invalid_json_denied) ... ok
+test_known_different_app_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_known_different_app_denied) ... ok
+test_malformed_envelopes_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_malformed_envelopes_denied) ... ok
+test_malformed_signatures_rejected (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_malformed_signatures_rejected) ... ok
+test_message_status_requires_phone (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_message_status_requires_phone) ... ok
+test_missing_app_id_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_missing_app_id_denied) ... ok
+test_missing_secret_fails_closed (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_missing_secret_fails_closed) ... ok
+test_missing_signature_rejected (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_missing_signature_rejected) ... ok
+test_multiple_phones_same_app_all_changes_retained (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_multiple_phones_same_app_all_changes_retained) ... ok
+test_no_accounts_fails_closed (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_no_accounts_fails_closed) ... ok
+test_no_http_request_is_not_authorization (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_no_http_request_is_not_authorization) ... ok
+test_oversized_body_denied (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_oversized_body_denied) ... ok
+test_phone_must_be_unique_in_app_waba (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_phone_must_be_unique_in_app_waba) ... ok
+test_raw_body_is_only_payload_consumed (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_raw_body_is_only_payload_consumed) ... ok
+test_scoped_status_queries (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_scoped_status_queries) ... ok
+test_tampered_raw_body_rejected (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_tampered_raw_body_rejected) ... ok
+test_template_query_is_scoped (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_template_query_is_scoped) ... ok
+test_template_scope_is_waba_and_app (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_template_scope_is_waba_and_app) ... ok
+test_unconfigured_waba_denied_even_if_payload_says_none (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_unconfigured_waba_denied_even_if_payload_says_none) ... ok
+test_valid_first_foreign_later_produces_no_writes (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_valid_first_foreign_later_produces_no_writes) ... ok
+test_valid_raw_signature_routes_exact_account (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_valid_raw_signature_routes_exact_account) ... ok
+test_wrong_secret_rejected (frappe_whatsapp.frappe_whatsapp.tests.test_webhook_signature.TestSignature.test_wrong_secret_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 40 tests in 0.330s
+
+OK

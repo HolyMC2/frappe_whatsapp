@@ -1,0 +1,9 @@
+RETRY identified DB concurrency conflict: fresh transaction/process
+PASS reversed overlapping batches: both atoms retained once, both earlier anchors preserved
+RETRY identified DB concurrency conflict: fresh transaction/process
+PASS duplicate HTTP transactions: one receipt, both earlier anchors preserved
+PASS two workers + replay: exactly one local effect
+PASS failed enrichment: retained receipt, recoverable across processes
+PASS crash-claim: durable claim, rollback of unfinished effect, restart recovery
+PASS crash-local: durable claim, rollback of unfinished effect, restart recovery
+PASS final abandoned lease: explicit exhausted outcome, no repeated effect

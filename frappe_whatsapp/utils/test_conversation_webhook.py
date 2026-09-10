@@ -118,7 +118,9 @@ class TestWebhookRouting(IntegrationTestCase):
 		req.get_data.return_value = json.dumps(payload).encode()
 		req.headers = {"X-Hub-Signature-256": signature.expected_signature(f"{phone}_secret", req.get_data())}
 		with patch.object(frappe, "request", req):
-			return webhook.webhook()
+			# Domain/media regression: consume verified changes synchronously.
+			# Durable receipt/worker behavior has its own real-SQL suite.
+			return [webhook.process_change(scoped) for scoped in signature.verify_request()]
 
 	def _get(self, verify_token, challenge="chal-123"):
 		req = MagicMock()
