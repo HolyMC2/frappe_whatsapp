@@ -1,0 +1,10 @@
+{"event": "process_ok", "remaining_stdout": "", "stderr": ""}
+{"event": "process_ok", "remaining_stdout": "", "stderr": ""}
+{"event": "send_before_first_open_pass", "physical_attempts": 1}
+{"event": "old_snapshot_result", "reason": "legacy_control_conflict", "sql_error_code": 1020}
+{"event": "process_ok", "remaining_stdout": "", "stderr": ""}
+{"event": "process_ok", "remaining_stdout": "", "stderr": ""}
+{"event": "process_ok", "remaining_stdout": "", "stderr": ""}
+{"event": "first_open_before_send_pass", "stale_snapshot_bypassed": false, "physical_attempts": 0}
+{"event": "cleanup", "conversations_closed": true, "fictional_account_disabled": true}
+{"event": "PASS", "child_processes": 5, "physical_doubles": 1, "live_provider_attempts": 0}

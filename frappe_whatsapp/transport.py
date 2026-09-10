@@ -48,6 +48,7 @@ by phone_id). Per-account is the only granularity that supports that.
 from __future__ import annotations
 
 import json
+import time
 import uuid
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -284,9 +285,13 @@ def api(
 
 	account_doc = resolve_account(account)
 	_guard_live(account_doc, url)
-	if (method or "POST").upper() == "POST":
-		return make_post_request(url, headers=headers, data=data)
-	return make_request(method, url, headers=headers, data=data)
+	from frappe_whatsapp.legacy_outbox import guard_transport_send, message_headers
+	with guard_transport_send(account_doc, method or "POST", url, data=data) as frozen:
+		if frozen is not None:
+			return _message_api(url, message_headers(headers), frozen)
+		if (method or "POST").upper() == "POST":
+			return make_post_request(url, headers=headers, data=data)
+		return make_request(method, url, headers=headers, data=data)
 
 
 def raw(account: Any, method: str, url: str, **kwargs):
@@ -298,7 +303,40 @@ def raw(account: Any, method: str, url: str, **kwargs):
 
 	account_doc = resolve_account(account)
 	_guard_live(account_doc, url)
-	return requests.request((method or "GET").upper(), url, **kwargs)
+	from frappe_whatsapp.legacy_outbox import guard_transport_send, message_headers
+	with guard_transport_send(account_doc, method or "GET", url, data=kwargs.get("data"),
+			json_body=kwargs.get("json"), params=kwargs.get("params"), files=kwargs.get("files")) as frozen:
+		if frozen is not None:
+			kwargs.pop("json", None)
+			kwargs["data"] = frozen
+			kwargs["headers"] = message_headers(kwargs.get("headers"))
+			kwargs["allow_redirects"] = False
+			kwargs["timeout"] = (5, 20)
+			kwargs["stream"] = True
+		return requests.request((method or "GET").upper(), url, **kwargs)
+
+
+def _message_api(url, headers, frozen):
+	"""Message-only bounded HTTP; preserve the legacy parsed-dict interface."""
+	from frappe_whatsapp.legacy_outbox import LegacyMessageError, SafeIntegrationResponse, message_result
+	frappe.flags.integration_request = SafeIntegrationResponse()
+	response = None
+	try:
+		deadline = time.monotonic() + 30
+		response = requests.request("POST", url, headers=headers, data=frozen,
+			timeout=(5, 20), allow_redirects=False, stream=True)
+		return message_result(response, json.loads(frozen)["to"], deadline)
+	except LegacyMessageError as error:
+		frappe.flags.integration_request = SafeIntegrationResponse(error.reason_code)
+		raise
+	except Exception:
+		raise LegacyMessageError("provider_response_uncertain") from None
+	finally:
+		if response is not None:
+			try:
+				response.close()
+			except Exception:
+				pass
 
 
 def post(account: Any, url: str, **kwargs) -> dict:

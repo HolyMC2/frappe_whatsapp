@@ -1,0 +1,43 @@
+{"event": "process_ok", "remaining_stdout": "", "stderr": ""}
+{"event": "process_ok", "remaining_stdout": "", "stderr": ""}
+{"event": "send_before_first_open_pass", "physical_attempts": 1}
+{"event": "cleanup", "conversations_closed": true, "fictional_account_disabled": true}
+Traceback (most recent call last):
+  File "/tmp/meta-wa-20260910/coordination/meta-reliability/legacy_send_concurrency.py", line 207, in <module>
+    proof()
+    ~~~~~^^
+  File "/tmp/meta-wa-20260910/coordination/meta-reliability/legacy_send_concurrency.py", line 181, in proof
+    assert line(sender)["event"] == "legacy_denied"
+           ~~~~^^^^^^^^
+  File "/tmp/meta-wa-20260910/coordination/meta-reliability/legacy_send_concurrency.py", line 112, in line
+    raise AssertionError("Child exited before proof event: " + proc.stderr.read().decode())
+AssertionError: Child exited before proof event: {"diagnostic_class": "LegacySendBlocked", "frames": [["/tmp/meta-wa-20260910/coordination/meta-reliability/legacy_send_concurrency.py", 85, "child"], ["/tmp/meta-wa-20260910/frappe_whatsapp/transport.py", 289, "api"], ["/usr/local/lib/python3.14/contextlib.py", 141, "__enter__"], ["/tmp/meta-wa-20260910/frappe_whatsapp/legacy_outbox.py", 195, "guard_transport_send"]]}
+{"diagnostic_class": "LegacySendBlocked", "frames": [["/tmp/meta-wa-20260910/frappe_whatsapp/legacy_outbox.py", 186, "guard_transport_send"], ["/usr/local/lib/python3.14/contextlib.py", 530, "enter_context"], ["/usr/local/lib/python3.14/contextlib.py", 141, "__enter__"], ["/tmp/meta-wa-20260910/crm/api/outbox_legacy.py", 50, "guard_legacy_send"]]}
+{"diagnostic_class": "QueryDeadlockError", "frames": [["/tmp/meta-wa-20260910/crm/api/outbox_legacy.py", 34, "guard_legacy_send"], ["/home/frappe/frappe-bench/apps/frappe/frappe/database/database.py", 564, "get_value"], ["/home/frappe/frappe-bench/apps/frappe/frappe/database/database.py", 680, "get_values"], ["/home/frappe/frappe-bench/apps/frappe/frappe/query_builder/utils.py", 135, "execute_query"], ["/home/frappe/frappe-bench/apps/frappe/frappe/database/database.py", 278, "sql"]]}
+{"diagnostic_class": "OperationalError", "frames": [["/home/frappe/frappe-bench/apps/frappe/frappe/database/database.py", 272, "sql"], ["/home/frappe/frappe-bench/apps/frappe/frappe/database/database.py", 372, "execute_query"], ["/home/frappe/frappe-bench/env/lib/python3.14/site-packages/MySQLdb/cursors.py", 179, "execute"], ["/home/frappe/frappe-bench/env/lib/python3.14/site-packages/MySQLdb/cursors.py", 330, "_query"], ["/home/frappe/frappe-bench/env/lib/python3.14/site-packages/MySQLdb/connections.py", 280, "query"]]}
+Traceback (most recent call last):
+  File "/tmp/meta-wa-20260910/coordination/meta-reliability/legacy_send_concurrency.py", line 85, in child
+    transport.api(cfg["account"], "POST", "https://graph.facebook.com/v23.0/" + cfg["account_id"] + "/messages",
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                  data=json.dumps(payload))
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/meta-wa-20260910/frappe_whatsapp/transport.py", line 289, in api
+    with guard_transport_send(account_doc, method or "POST", url, data=data) as frozen:
+         ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.14/contextlib.py", line 141, in __enter__
+    return next(self.gen)
+  File "/tmp/meta-wa-20260910/frappe_whatsapp/legacy_outbox.py", line 195, in guard_transport_send
+    raise LegacySendBlocked(reason) from None
+frappe_whatsapp.legacy_outbox.LegacySendBlocked: legacy_control_unavailable
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/meta-wa-20260910/coordination/meta-reliability/legacy_send_concurrency.py", line 205, in <module>
+    child(sys.argv[1], json.loads(sys.argv[2]))
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/meta-wa-20260910/coordination/meta-reliability/legacy_send_concurrency.py", line 94, in child
+    assert error.reason_code == "native_outbound_intent_required"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError
+

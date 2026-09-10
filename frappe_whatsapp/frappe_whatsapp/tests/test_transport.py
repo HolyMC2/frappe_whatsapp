@@ -139,10 +139,12 @@ class TestLiveMode(unittest.TestCase):
 	def test_live_still_calls_through(self):
 		name = _ensure_account(transport.MODE_LIVE)
 		url = f"{_GRAPH}/v19.0/1234567890/messages"
-		with patch.object(transport, "make_post_request", return_value={"ok": 1}) as mp:
-			out = transport.api(name, "POST", url, data="{}")
+		from frappe_whatsapp.frappe_whatsapp.tests.test_native_outbox import Response
+		payload = {"messaging_product": "whatsapp", "contacts": [{"wa_id": "5215550001111"}], "messages": [{"id": "wamid.fictional-call-through"}]}
+		with patch.object(transport.requests, "request", return_value=Response(payload=payload)) as mp:
+			out = transport.api(name, "POST", url, data='{"messaging_product":"whatsapp","to":"5215550001111","type":"text","text":{"body":"Fictional call-through"}}')
 		mp.assert_called_once()
-		self.assertEqual(out, {"ok": 1})
+		self.assertEqual(out["messages"], payload["messages"])
 
 	def test_default_mode_is_live(self):
 		"""Existing accounts predate the field. Defaulting to Demo would
