@@ -23,6 +23,9 @@
   "message",
   "message_type",
   "message_id",
+  "external_receipt",
+  "external_sent_at",
+  "external_media",
   "conversation_id",
   "content_type",
   "attach",
@@ -150,6 +153,30 @@
    "fieldtype": "Data",
    "label": "Message ID",
    "read_only": 1
+  },
+  {
+   "fieldname": "external_receipt",
+   "fieldtype": "Data",
+   "label": "External Receipt",
+   "read_only": 1,
+   "hidden": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "external_sent_at",
+   "fieldtype": "Datetime",
+   "label": "External App Sent At",
+   "read_only": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "external_media",
+   "fieldtype": "Code",
+   "options": "JSON",
+   "label": "External Media Metadata",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Provider media identifiers and metadata from an external business-app echo. Media is not downloaded automatically."
   },
   {
    "fieldname": "conversation_id",
