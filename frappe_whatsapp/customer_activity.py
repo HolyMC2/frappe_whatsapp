@@ -1,6 +1,6 @@
 """Bound the durable WA message atom before entering customer control.
 
-Proposed receipt hookup only: the existing webhook is intentionally unchanged.
+Called by the receipt consumer before ordinary incoming-message projection.
 """
 
 import hashlib

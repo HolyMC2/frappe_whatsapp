@@ -22,7 +22,7 @@ def _live_claim(row):
 
 
 def fold_native_delivery(entry, accounts):
-    """Proposed call at the start of _apply_message_status, before WM locks.
+    """Called at the start of _apply_message_status, before WM locks.
 
     A verified native match can satisfy an absent legacy WM. Missing matches do
     not suppress legacy processing or its retryable missing-target outcome.
