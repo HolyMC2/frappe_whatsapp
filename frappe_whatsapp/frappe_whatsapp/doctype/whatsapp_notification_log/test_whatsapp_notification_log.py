@@ -4,6 +4,7 @@
 from unittest.mock import patch
 
 import frappe
+from frappe.utils import add_to_date, now_datetime
 from frappe_whatsapp.testing import IntegrationTestCase
 
 
@@ -90,14 +91,25 @@ class TestWhatsAppNotificationLogRetention(IntegrationTestCase):
             f"DELETE FROM `{self.TABLE}` WHERE name LIKE %s", (self.PREFIX + "%",)
         )
 
-    def _row(self, suffix, age_days):
+    def _row(self, suffix, age_days, age_hours=0):
+        """Insert a fixture row aged on THE SITE'S CLOCK.
+
+        `creation` is written by frappe from now_datetime() — a naive datetime
+        on the site's timezone — and clear_old_logs builds its cutoff the same
+        way. MariaDB's own NOW() is UTC on this estate (time_zone=SYSTEM), so
+        ageing a fixture with DATE_SUB(NOW(), ...) put it on a DIFFERENT clock
+        than the code under test, which left the window's LAST DAY untestable:
+        the edge row lived or died depending on the hour the suite ran.
+        `age_hours` is added to the age, so a NEGATIVE value makes the row that
+        much younger than `age_days`.
+        """
         name = self.PREFIX + suffix
+        created = add_to_date(now_datetime(), days=-age_days, hours=-age_hours)
         frappe.db.sql(
             f"""INSERT INTO `{self.TABLE}`
                 (name, creation, modified, owner, modified_by, docstatus)
-                VALUES (%s, DATE_SUB(NOW(), INTERVAL %s DAY), NOW(),
-                        'Administrator', 'Administrator', 0)""",
-            (name, age_days),
+                VALUES (%s, %s, %s, 'Administrator', 'Administrator', 0)""",
+            (name, created, now_datetime()),
         )
         return name
 
@@ -129,6 +141,26 @@ class TestWhatsAppNotificationLogRetention(IntegrationTestCase):
             if days is None:
                 return controller.clear_old_logs()
             return controller.clear_old_logs(days)
+
+    def test_the_window_edge_is_measured_in_hours_on_the_site_clock(self):
+        """The LAST DAY of the window — what two different clocks got wrong.
+
+        A row one hour INSIDE `days` must stay and one hour PAST it must go, at
+        every wall-clock hour, whether the site's timezone is ahead of UTC
+        (Asia/Kolkata on doco-mirror) or behind it (America/Mazatlan on the
+        tenants). Two cutoffs broke that: `add_days(today(), -days)` truncated
+        to site midnight, so a row `days` old plus an hour survived for as many
+        hours as the site's day was old — the books_chat_log failure w15
+        reported — and a `DATE_SUB(NOW(), ...)` cutoff measures from MariaDB's
+        UTC, which purges up to 7 h EARLY on a Mazatlan tenant. Both are now
+        built from now_datetime(), the clock `creation` itself carries.
+        """
+        just_inside = self._row("edge_inside", self.DEFAULT_DAYS, age_hours=-1)  # days - 1 h
+        just_outside = self._row("edge_outside", self.DEFAULT_DAYS, age_hours=1)  # days + 1 h
+        self._clear(self.DEFAULT_DAYS)
+        survivors = self._surviving()
+        self.assertIn(just_inside, survivors, "one hour INSIDE the window must survive")
+        self.assertNotIn(just_outside, survivors, "one hour PAST the window must go")
 
     def test_the_purge_returns_its_count_as_data(self):
         """A purge summary must be reachable without scraping stdout:

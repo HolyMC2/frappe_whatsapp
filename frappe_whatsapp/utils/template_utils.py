@@ -1,3 +1,4 @@
+import frappe
 def get_template_values(template_name, recipient_data=None):
     """
     Get the template values for a WhatsApp template
