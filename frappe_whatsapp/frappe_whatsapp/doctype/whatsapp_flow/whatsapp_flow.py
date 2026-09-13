@@ -2,7 +2,9 @@
 # For license information, please see license.txt
 
 import json
+
 import frappe
+import requests
 from frappe import _
 from frappe.model.document import Document
 from frappe_whatsapp import transport
