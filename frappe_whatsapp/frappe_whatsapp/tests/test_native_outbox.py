@@ -285,6 +285,22 @@ class TestNativeOutbox(unittest.TestCase):
             self.assertEqual(self.send()["state"], "Unknown")
             self.assertTrue(response.closed)
 
+    def test_echoed_input_accepts_metas_canonical_id_but_nothing_else(self):
+        sent = self.intent.peer_id
+        canonical = sent[:2] + "1" + sent[2:]  # Meta's id for the same mobile (e.g. 52… sent, 521… returned)
+        cases = {
+            "echoed input, canonical id": ({"input": sent, "wa_id": canonical}, "Accepted"),
+            "no echo, id differs": ({"wa_id": canonical}, "Unknown"),
+            "echo of another number": ({"input": canonical, "wa_id": canonical}, "Unknown"),
+            "echoed input, id not a number": ({"input": sent, "wa_id": "other"}, "Unknown"),
+            "echoed input, id missing": ({"input": sent}, "Unknown"),
+        }
+        for label, (contact, state) in cases.items():
+            with self.subTest(label):
+                self.post.return_value = Response(payload={"messaging_product": "whatsapp", "contacts": [contact],
+                                                           "messages": [{"id": "wamid.canonical-fixture"}]})
+                self.assertEqual(self.send()["state"], state)
+
     def test_response_cap_prevents_buffering_and_closes_stream(self):
         responses = [Response(headers={"Content-Type": "application/json", "Content-Length": str(gateway.MAX_RESPONSE_BYTES + 1)}, chunks=[b"unused"]),
                      Response(chunks=[b"x" * 8192] * 9 + [AssertionError("past cap")])]

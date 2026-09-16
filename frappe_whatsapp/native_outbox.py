@@ -284,8 +284,14 @@ def _classify(response, peer_id, deadline):
     _require(parsed.get("messaging_product") == "whatsapp" and "error" not in parsed)
     contacts, messages = parsed.get("contacts"), parsed.get("messages")
     _require(isinstance(contacts, list) and len(contacts) == 1 and isinstance(contacts[0], dict))
-    _require(contacts[0].get("wa_id") == peer_id)
-    _require(contacts[0].get("input", peer_id) == peer_id)
+    contact = contacts[0]
+    # Meta echoes the number we sent as `input` and answers with the recipient's
+    # WhatsApp id as `wa_id`; they can differ for the same person (Mexican mobiles:
+    # 52… sent, 521… returned). The exact echo proves the recipient; without an
+    # echo the id itself must match. Requiring both to match marked delivered
+    # messages as failed, and the daily retry sent them again (2026-09-16).
+    _require(isinstance(contact.get("wa_id"), str) and re.fullmatch(r"[0-9]{1,40}", contact["wa_id"]))
+    _require(contact.get("input", contact["wa_id"]) == peer_id)
     _require(isinstance(messages, list) and len(messages) == 1 and isinstance(messages[0], dict))
     message_id = _identifier(messages[0].get("id"))
     _require(message_id.startswith("wamid.") and len(message_id) > 6 and not message_id.startswith(transport.DEMO_ID_PREFIX))
