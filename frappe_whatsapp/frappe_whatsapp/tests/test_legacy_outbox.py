@@ -54,6 +54,15 @@ class TestLegacyTransport(unittest.TestCase):
         self.old_post.assert_not_called()
         self.old_request.assert_not_called()
 
+    def test_a_delivered_send_to_the_short_mobile_spelling_is_success_not_a_failure(self):
+        # 2026-09-16: 52… sent, Meta answered 521… with our input echoed; the send
+        # raised, the review row went Fallido and the daily retry sent it again.
+        sent = "52" + self.peer[3:]
+        self.http.side_effect = lambda *a, **k: Response(payload={"messaging_product": "whatsapp",
+            "contacts": [{"input": sent, "wa_id": self.peer}], "messages": [{"id": "wamid.fictional-short-spelling"}]})
+        result = self.call(data=json.dumps({**self.payload, "to": sent}))
+        self.assertEqual(result["messages"][0]["id"], "wamid.fictional-short-spelling")
+
     def test_optional_crm_absent_still_validates_current_account_without_creating(self):
         with patch.object(frappe, "get_doc", side_effect=AssertionError("No identity creation")):
             self.call()
