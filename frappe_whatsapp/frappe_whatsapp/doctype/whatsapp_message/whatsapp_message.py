@@ -80,6 +80,27 @@ class WhatsAppMessage(Document):
         self.send_outgoing()
         self.create_whatsapp_profile()
 
+    def after_insert(self):
+        """A send deferred to CRM's native outbox is queued once the row has its name.
+        A refusal removes the row with everything this insert did, then raises, so
+        no caller can keep a queued transcript that nothing will ever send."""
+        pending = self.flags.pop("native_transcript", None)
+        if not pending:
+            return
+        account, data, point = pending
+        try:
+            from crm.api.outbox_bridge import queue_transcript
+            queue_transcript(self, frappe.get_doc("WhatsApp Account", account), data)
+        except Exception as error:
+            try:
+                frappe.db.rollback(save_point=point)
+            except Exception:
+                # A deadlock or lock timeout already ended the transaction and its
+                # savepoints; the original error is the one the caller must see.
+                pass
+            raise error
+        frappe.db.release_savepoint(point)
+
     def _insert_external_projection(self, token):
         """Private exact-document seam: no sends, hooks, profile or CRM routing."""
         from frappe_whatsapp.coexistence import assert_projection_insert
@@ -238,8 +259,11 @@ class WhatsAppMessage(Document):
 
             try:
                 self.notify(data)
-                self.status = "Success"
+                if not self.flags.get("native_deferred"):
+                    self.status = "Success"
             except Exception as e:
+                if getattr(e, "native_refusal", False):
+                    raise  # already says what to do; not a transport failure
                 self.status = "Failed"
                 frappe.throw(f"Failed to send message {str(e)}")
         elif not self.message_id:
@@ -559,6 +583,8 @@ class WhatsAppMessage(Document):
             "WhatsApp Account",
             self.whatsapp_account,
         )
+        if self._defer_to_native(whatsapp_account, data):
+            return
         token = whatsapp_account.get_password("token")
 
         headers = {
@@ -595,6 +621,33 @@ class WhatsAppMessage(Document):
             ).insert(ignore_permissions=True)
 
             frappe.throw(msg=error_message, title=res.get("error_user_title", "Error"))
+
+    def _defer_to_native(self, account, data):
+        """Hand this send to CRM's native outbox when a native conversation governs
+        the recipient; the row stays as the transcript and shows the intent's state.
+        Without CRM, or for any other recipient, the send continues unchanged."""
+        if "crm" not in frappe.get_installed_apps():
+            return False
+        try:
+            from crm.api.outbox_bridge import governing_conversation, queue_transcript
+        except ImportError:
+            return False
+        if not governing_conversation(account, data.get("to")):
+            return False
+        self.status, self.message_id, self.failure_reason = "Queued", None, None
+        # Delivery receipts match the row by the exact recipient Meta answers for.
+        self.to = data.get("to")
+        self.flags.native_deferred = True
+        if self.is_new():
+            point = "native_transcript_" + frappe.generate_hash(length=12)
+            frappe.db.savepoint(point)
+            self.flags.native_transcript = (account.name, data, point)
+        else:
+            # A re-send of an existing row requeues its own intent, never a second one.
+            from crm.api.outbox_bridge import requeue_transcript
+            if not requeue_transcript(self):
+                queue_transcript(self, account, data)
+        return True
 
     def format_number(self, number):
         """Format number."""

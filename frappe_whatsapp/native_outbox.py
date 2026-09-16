@@ -325,3 +325,51 @@ def send_frozen(intent, payload):
                 response.close()
             except Exception:
                 pass
+
+
+def project_accepted(intent, payload, *, name, whatsapp_account, reference_doctype=None, reference_name=None,
+                     sent_by=None, actor=None):
+    """Transcript row for an accepted native send that no producer wrote.
+
+    The core outbox calls this inside its fence for the intent it just accepted.
+    No Meta request, hooks or CRM routing run; the row is named after the intent,
+    so a replay finds it instead of adding a second copy.
+    """
+    if intent.provider != "WhatsApp" or intent.state != "Accepted" or not intent.provider_message_id:
+        raise ValueError("native_projection_not_accepted")
+    if frappe.db.exists("WhatsApp Message", name):
+        return None
+    kind = payload.get("type")
+    content = payload.get(kind) or {}
+    now = frappe.utils.now_datetime()
+    values = {
+        "doctype": "WhatsApp Message", "name": name, "owner": actor or frappe.session.user,
+        "modified_by": actor or frappe.session.user, "creation": now, "modified": now, "docstatus": 0,
+        "type": "Outgoing", "status": "Success", "to": intent.peer_id, "message_id": intent.provider_message_id,
+        "whatsapp_account": whatsapp_account, "message_type": "Manual", "content_type": "text",
+        "reference_doctype": reference_doctype, "reference_name": reference_name,
+    }
+    if kind == "text":
+        values["message"] = content.get("body", "")
+    elif kind == "template":
+        template = frappe.db.get_value("WhatsApp Templates", {
+            "whatsapp_account": whatsapp_account, "language_code": (content.get("language") or {}).get("code"),
+            "actual_name": content.get("name")}, "name") or frappe.db.get_value("WhatsApp Templates", {
+            "whatsapp_account": whatsapp_account, "template_name": content.get("name")}, "name")
+        body = [p.get("text", "") for component in content.get("components", []) if component.get("type") == "body"
+                for p in component.get("parameters", []) if p.get("type") == "text"]
+        values.update(message_type="Template", use_template=1, template=template,
+                      template_parameters=json.dumps(body, ensure_ascii=False), message=content.get("name", ""))
+    elif kind in _MEDIA:
+        values.update(content_type=kind, message=content.get("caption", ""), attach=content.get("link"))
+    elif kind == "reaction":
+        values.update(content_type="reaction", message=content.get("emoji", ""), reply_to_message_id=content.get("message_id"))
+    elif kind == "interactive":
+        values.update(content_type="interactive", message=(content.get("body") or {}).get("text", ""))
+    if payload.get("context"):
+        values.update(is_reply=1, reply_to_message_id=payload["context"].get("message_id"))
+    if frappe.db.has_column("WhatsApp Message", "doco_sent_by_type"):
+        values.update(doco_sent_by_type=sent_by, doco_actor_user=actor)
+    doc = frappe.get_doc(values)
+    doc.db_insert()
+    return doc

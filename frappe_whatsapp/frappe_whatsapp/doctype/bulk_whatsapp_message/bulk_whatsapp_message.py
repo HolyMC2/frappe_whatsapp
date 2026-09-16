@@ -157,6 +157,14 @@ class BulkWhatsAppMessage(Document):
     def resend_single_message(self, message_name):
         """Worker entry: re-send a single failed WhatsApp Message."""
         message_doc = frappe.get_doc("WhatsApp Message", message_name)
+        if self._native_transcript(message_name):
+            # A native send keeps its provider id and reason; its own intent retries it.
+            try:
+                from crm.api.outbox_bridge import requeue_transcript
+                requeue_transcript(message_doc)
+            except Exception:
+                frappe.log_error(title=f"WhatsApp bulk retry skipped a native send: {message_name}")
+            return
         # Clear the prior message_id so the template send path (which gates
         # on `not self.message_id`) runs again.
         message_doc.message_id = None
@@ -164,7 +172,9 @@ class BulkWhatsAppMessage(Document):
         message_doc.db_update()
         try:
             message_doc.send_outgoing()
-            message_doc.status = "Success"
+            # A send handed to CRM's native outbox is queued, not yet sent.
+            if not message_doc.flags.get("native_deferred"):
+                message_doc.status = "Success"
             message_doc.db_update()
         except Exception:
             message_doc.status = "Failed"
@@ -173,6 +183,13 @@ class BulkWhatsAppMessage(Document):
                 title=f"WhatsApp bulk retry failed: {message_doc.name}"
             )
         
+    @staticmethod
+    def _native_transcript(message_name):
+        if "crm" not in frappe.get_installed_apps() or not frappe.db.exists("DocType", "CRM Outbound Intent") \
+                or not frappe.db.has_column("CRM Outbound Intent", "transcript_message"):
+            return False
+        return bool(frappe.db.exists("CRM Outbound Intent", {"transcript_message": message_name}))
+
     def get_progress(self):
         """Get sending progress for this bulk message"""
         total = self.recipient_count

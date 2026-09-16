@@ -160,7 +160,10 @@ class TestReceiptPipelineSql(unittest.TestCase):
         self.assertEqual((row.state, phases, rollback), ("Processed", ["Processing", "Processed"], []))
         intent.reload()
         self.assertEqual(intent.state, "Delivered")
-        self.assertFalse(frappe.db.exists("WhatsApp Message", {"message_id": mid}))
+        # No legacy row is needed; the transcript projection follows the same receipt.
+        self.assertFalse(frappe.db.exists("WhatsApp Message", {"message_id": mid, "name": ["not like", "wa-native-%"]}))
+        if "crm" in frappe.get_installed_apps():
+            self.assertEqual(frappe.db.get_value("WhatsApp Message", {"message_id": mid}, "status"), "delivered")
 
     def test_missing_target_stays_failed_then_same_receipt_retries_after_native_target_exists(self):
         mid = "wamid.late-target-" + uuid4().hex
