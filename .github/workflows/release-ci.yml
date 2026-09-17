@@ -1,0 +1,106 @@
+# frappe_whatsapp release CI.
+#
+# This fork had never recorded a CI run: upstream's ci.yml needs a full bench
+# and only fires on master, develop and PRs. Release decision 2026-09-17: a
+# release lane on `release/full-ci-*` pushes, `full-ci-*` tags and PRs, whose
+# green run on the exact SHA is the evidence for shipping. It needs no site and
+# runs on any runner:
+#
+#   1. ruff restricted to the classes that are always bugs (syntax errors,
+#      undefined names, f-string and assert mistakes) over the app and tests.
+#      Not a full lint: a gate that is red on arrival teaches people to ignore it.
+#   2. `compileall` on CPython 3.14, the interpreter the bench runs.
+#   3. The bench-free suite in tests/:
+#      - the app's own site-free unit classes (tests/test_existing_bench_free.py);
+#      - focused tests for the wa_id echo fix (1f3707c) and the native send
+#        bridge (43b1b33);
+#      - a contract test that binds every call this app makes into CRM against
+#        the pinned CRM source below.
+#      tests/_frappe_stub.py stands in for Frappe and raises on any call a test
+#      did not patch. A skipped or empty suite fails the job.
+#
+# Pins: CRM_REF is the CRM commit this app ships with. The bridge imports
+# crm.api.outbox_bridge, so both must move together; bump it with the CRM pin.
+# requests and Werkzeug match Frappe v16.34.0's pins.
+#
+# Not here, on purpose: the IntegrationTestCase and SQL suites. They need a site:
+# `bench run-tests --app frappe_whatsapp`.
+#
+# No `paths:` filter on purpose: a required check that a path filter skips
+# reports nothing.
+
+name: release CI
+
+on:
+  push:
+    branches: ['release/full-ci-*']
+    tags: ['full-ci-*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: release-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CRM_REF: eff87305decfdf27a64f0bcce8b2824c0862ca54
+
+jobs:
+  checks:
+    name: ruff gate, compileall and bench-free suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frappe_whatsapp
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: frappe_whatsapp
+
+      - name: Checkout pinned CRM contracts
+        uses: actions/checkout@v4
+        with:
+          repository: HolyMC2/crm
+          ref: ${{ env.CRM_REF }}
+          persist-credentials: false
+          sparse-checkout: |
+            crm/api
+            crm/fcrm/doctype/crm_outbound_intent
+          path: crm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      # Pinned: an unpinned ruff adds rules on its own schedule and turns this
+      # gate red without a commit.
+      - name: Install tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff==0.14.14 pytest==8.3.4 requests==2.33.1 Werkzeug==3.1.6
+
+      - name: Ruff — syntax and undefined names
+        run: python -m ruff check --select E9,F63,F7,F82,F821 frappe_whatsapp tests
+
+      - name: Byte-compile the app and tests
+        run: python -m compileall -q frappe_whatsapp tests
+
+      - name: Bench-free suite
+        env:
+          CRM_SOURCE: ${{ github.workspace }}/crm
+        run: |
+          python -m pytest -q -rs --junitxml="$RUNNER_TEMP/bench-free.xml" tests
+          python - "$RUNNER_TEMP/bench-free.xml" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+          root = ET.parse(sys.argv[1]).getroot()
+          suite = root if root.tag == "testsuite" else root.find("testsuite")
+          counts = {key: int(suite.get(key, 0)) for key in ("tests", "failures", "errors", "skipped")}
+          print("bench-free:", counts)
+          if not counts["tests"] or counts["skipped"]:
+              sys.exit("A skipped or empty bench-free suite proves nothing: check the pinned CRM checkout.")
+          PY
