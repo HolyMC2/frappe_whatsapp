@@ -193,6 +193,28 @@ class TestReceiptPipelineSql(unittest.TestCase):
         intent.reload()
         self.assertEqual((wrong.status, correct.status, intent.state), ("sent", "delivered", "Delivered"))
 
+    def test_mexican_mobile_receipt_reaches_the_row_that_stored_the_dialled_number(self):
+        # Meta reports 521 + the 10 national digits for a number a legacy send dialled as
+        # 52 + the same 10. One accepted spelling left every such send on «Enviando…».
+        dialled = "52" + str(int(uuid4().hex[:10], 16)).zfill(10)[-10:]
+        mid = "wamid.mx-" + uuid4().hex
+        row = self.legacy(mid, dialled)
+        entry = {**self.status(mid), "recipient_id": "521" + dialled[2:]}
+        receipt, phases, rolled_back = self.run_worker(self.admit(statuses=[entry])[0])
+        self.assertEqual((receipt.state, phases, rolled_back), ("Processed", ["Processing", "Processed"], []))
+        row.reload()
+        self.assertEqual(row.status, "delivered")
+
+    def test_another_national_number_is_not_folded_into_the_mexican_pair(self):
+        dialled = "52" + str(int(uuid4().hex[:10], 16)).zfill(10)[-10:]
+        mid = "wamid.mx-other-" + uuid4().hex
+        row = self.legacy(mid, dialled)
+        entry = {**self.status(mid), "recipient_id": "521" + str(int(dialled[2:]) + 1).zfill(10)[-10:]}
+        receipt, _, _ = self.run_worker(self.admit(statuses=[entry])[0])
+        self.assertEqual((receipt.state, receipt.reason_code), ("Failed", "message_not_found"))
+        row.reload()
+        self.assertEqual(row.status, "sent")
+
     def test_wrong_peer_legacy_row_cannot_satisfy_missing_native_target(self):
         mid = "wamid.wrong-peer-" + uuid4().hex
         wrong = self.legacy(mid, self.peer + "1")

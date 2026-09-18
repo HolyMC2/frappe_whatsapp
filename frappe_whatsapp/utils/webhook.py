@@ -3,6 +3,7 @@ import frappe
 
 from frappe_whatsapp import transport
 import json
+import re
 import requests
 import time
 from frappe import _
@@ -392,6 +393,23 @@ def update_message_status(data, accounts):
 		_apply_message_status(entry, accounts)
 
 
+def _recipient_spellings(recipient_id):
+	"""The one recipient, spelled as Meta reports it and as an outgoing row stores it.
+
+	A legacy row keeps the number the sender dialled; Meta answers with the recipient's
+	WhatsApp id. For Mexican mobiles those differ by one digit — 52 + 10 national digits
+	dialled, 521 + the same 10 returned — so an exact match dropped every delivery,
+	read and failure receipt for a legacy send and the message hung on «Enviando…»
+	(docomexico 2026-09-17). Only that documented pair is folded; any other number,
+	and any other length, remains a different recipient.
+	"""
+	if re.fullmatch(r"521[0-9]{10}", recipient_id):
+		return [recipient_id, "52" + recipient_id[3:]]
+	if re.fullmatch(r"52[0-9]{10}", recipient_id):
+		return [recipient_id, "521" + recipient_id[2:]]
+	return [recipient_id]
+
+
 def _apply_message_status(entry, accounts):
 	native = None
 	if frappe.flags.get("meta_webhook_receipt"):
@@ -401,10 +419,16 @@ def _apply_message_status(entry, accounts):
 	status = entry['status']
 	conversation = entry.get('conversation', {}).get('id')
 	filters = {"message_id": id, "whatsapp_account": ["in", accounts], "type": "Outgoing"}
-	if native is not None:
-		# The bridge verified this recipient against the immutable status atom.
-		filters["to"] = entry["recipient_id"]
-	name = frappe.db.get_value("WhatsApp Message", filters=filters, for_update=True)
+	name = None
+	# The bridge verified this recipient against the immutable status atom, so the row
+	# must carry that number. One spelling at a time, reported first: a bridged send can
+	# hold both a native projection row and a legacy row for one message id, and a single
+	# `in` lookup would pick between them by whatever the engine returned first.
+	for spelling in (_recipient_spellings(entry["recipient_id"]) if native is not None else [None]):
+		lookup = filters if spelling is None else {**filters, "to": spelling}
+		name = frappe.db.get_value("WhatsApp Message", filters=lookup, for_update=True)
+		if name:
+			break
 	if not name:
 		if native and native.get("matched"):
 			return
