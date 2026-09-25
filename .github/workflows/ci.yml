@@ -4,30 +4,28 @@ on:
   push:
     branches:
       - master
-      - develop
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# This fork ships beside the CRM fork (native outbox bridge), which needs
+# Frappe 16, and its bench tests import crm. Test that pairing, at the same
+# CRM pin release-ci.yml checks the bridge contract against.
+env:
+  CRM_REF: eff87305decfdf27a64f0bcce8b2824c0862ca54
+
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - frappe-branch: version-14
-            python-version: "3.10"
-            node-version: 16
-          - frappe-branch: version-15
-            python-version: "3.11"
-            node-version: 18
           - frappe-branch: version-16
-            python-version: "3.14"
-            node-version: 24
-          - frappe-branch: develop
             python-version: "3.14"
             node-version: 24
 
@@ -63,6 +61,14 @@ jobs:
     steps:
       - name: Clone
         uses: actions/checkout@v4
+
+      - name: Clone pinned CRM
+        uses: actions/checkout@v4
+        with:
+          repository: HolyMC2/crm
+          ref: ${{ env.CRM_REF }}
+          persist-credentials: false
+          path: .ci/crm
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -113,12 +119,14 @@ jobs:
         working-directory: /home/runner/frappe-bench
         run: |
           bench get-app frappe_whatsapp $GITHUB_WORKSPACE
+          bench get-app crm $GITHUB_WORKSPACE/.ci/crm
           bench setup requirements --dev
           ~/frappe-bench/env/bin/python -m ensurepip --upgrade 2>/dev/null || true
           ~/frappe-bench/env/bin/python -m pip install "setuptools<70"
           ~/frappe-bench/env/bin/python -c "import pkg_resources; print('pkg_resources OK')"
           bench new-site --db-root-password root --admin-password admin test_site
           bench --site test_site install-app frappe_whatsapp
+          bench --site test_site install-app crm
           bench build
         env:
           CI: "Yes"

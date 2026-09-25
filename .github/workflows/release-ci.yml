@@ -1,10 +1,9 @@
 # frappe_whatsapp release CI.
 #
-# This fork had never recorded a CI run: upstream's ci.yml needs a full bench
-# and only fires on master, develop and PRs. Release decision 2026-09-17: a
-# release lane on `release/full-ci-*` pushes, `full-ci-*` tags and PRs, whose
-# green run on the exact SHA is the evidence for shipping. It needs no site and
-# runs on any runner:
+# The fast gate beside ci.yml's bench run: it fires on master pushes, PRs and
+# on demand (gh workflow run release-ci.yml --ref <release ref>); its green run
+# on the exact SHA is the evidence for shipping. It needs no site and runs on
+# any runner:
 #
 #   1. ruff restricted to the classes that are always bugs (syntax errors,
 #      undefined names, f-string and assert mistakes) over the app and tests.
@@ -33,8 +32,7 @@ name: release CI
 
 on:
   push:
-    branches: ['release/full-ci-*']
-    tags: ['full-ci-*']
+    branches: [master]
   pull_request:
   workflow_dispatch:
 
