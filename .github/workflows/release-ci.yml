@@ -44,7 +44,7 @@ permissions:
   contents: read
 
 env:
-  CRM_REF: eff87305decfdf27a64f0bcce8b2824c0862ca54
+  CRM_REF: ed9e8dc236ca229d525f552f691edc5648d7c6de
 
 jobs:
   checks:
