@@ -5,7 +5,14 @@ import json
 from unittest.mock import patch
 
 import frappe
+from frappe_whatsapp import transport
 from frappe_whatsapp.testing import IntegrationTestCase
+from frappe_whatsapp.frappe_whatsapp.tests.test_native_outbox import Response
+
+# Fictional, but numeric like a real Graph phone-number id: the send fence only
+# scopes /{digits}/messages. Every request is answered by the double in setUp.
+PHONE_ID = "9941103"
+MESSAGES_URL = f"https://graph.facebook.com/v17.0/{PHONE_ID}/messages"
 
 
 class TestBulkWhatsAppMessage(IntegrationTestCase):
@@ -27,7 +34,7 @@ class TestBulkWhatsAppMessage(IntegrationTestCase):
                 "status": "Active",
                 "url": "https://graph.facebook.com",
                 "version": "v17.0",
-                "phone_id": "bulk_test_phone_id",
+                "phone_id": PHONE_ID,
                 "business_id": "bulk_test_business_id",
                 "app_id": "bulk_test_app_id",
                 "webhook_verify_token": "bulk_test_verify_token",
@@ -69,6 +76,26 @@ class TestBulkWhatsAppMessage(IntegrationTestCase):
             "is_default_outgoing": 1,
             "is_default_incoming": 1,
         })
+        # Message sends leave through the fence's own requests.request
+        # (transport._message_api), not make_post_request. Double that physical
+        # boundary for every test so nothing can reach Meta.
+        self.wamid = "wamid.bulk_unused"
+        self.http = self.enterContext(patch.object(transport.requests, "request", side_effect=self._graph))
+        self.old_post = self.enterContext(patch.object(transport, "make_post_request"))
+
+    def _graph(self, method, url, **kwargs):
+        """Graph accepting the send for the exact recipient it was given."""
+        to = json.loads(kwargs["data"])["to"]
+        return Response(payload={"messaging_product": "whatsapp", "contacts": [{"input": to, "wa_id": to}],
+                                 "messages": [{"id": self.wamid}]})
+
+    def _sent(self):
+        """Body of the single message POST that reached the physical boundary."""
+        self.http.assert_called_once()
+        self.old_post.assert_not_called()
+        args, kwargs = self.http.call_args
+        self.assertEqual(args, ("POST", MESSAGES_URL))
+        return json.loads(kwargs["data"])
 
     def tearDown(self):
         for name in frappe.get_all("Bulk WhatsApp Message", filters={"title": ["like", "Test Bulk%"]}, pluck="name"):
@@ -126,23 +153,25 @@ class TestBulkWhatsAppMessage(IntegrationTestCase):
         doc = self._make_bulk_message(title="Test Bulk Count")
         self.assertEqual(doc.recipient_count, 2)
 
-    @patch("frappe_whatsapp.transport.make_post_request")
-    def test_on_submit_queues_messages(self, mock_post):
+    def test_on_submit_queues_messages(self):
         """Test that submitting queues the messages."""
-        mock_post.return_value = {
-            "messages": [{"id": "wamid.bulk_test_1"}],
-        }
         doc = self._make_bulk_message(title="Test Bulk Submit")
-        doc.submit()
+        # Keep the jobs in this process: a worker running them would send with
+        # no double in place.
+        with patch(
+            "frappe_whatsapp.frappe_whatsapp.doctype.bulk_whatsapp_message.bulk_whatsapp_message.frappe.enqueue_doc"
+        ) as mock_enqueue:
+            doc.submit()
         doc.reload()
         self.assertEqual(doc.status, "Queued")
+        self.assertEqual(
+            [(c.args[2], c.kwargs["recipient"].mobile_number) for c in mock_enqueue.call_args_list],
+            [("create_single_message", "919900112233"), ("create_single_message", "919900112244")],
+        )
 
-    @patch("frappe_whatsapp.transport.make_post_request")
-    def test_create_single_message(self, mock_post):
+    def test_create_single_message(self):
         """Test creating a single message from bulk."""
-        mock_post.return_value = {
-            "messages": [{"id": "wamid.bulk_single_1"}],
-        }
+        self.wamid = "wamid.bulk_single_1"
         doc = self._make_bulk_message(title="Test Bulk Single")
 
         recipient = {
@@ -153,8 +182,13 @@ class TestBulkWhatsAppMessage(IntegrationTestCase):
         doc.create_single_message(recipient)
 
         self.assertTrue(
-            frappe.db.exists("WhatsApp Message", {"to": "919900112255"})
+            frappe.db.exists("WhatsApp Message", {
+                "to": "919900112255",
+                "bulk_message_reference": doc.name,
+                "message_id": "wamid.bulk_single_1",
+            })
         )
+        self.assertEqual(self._sent()["type"], "template")
 
     def test_get_progress(self):
         """Test get_progress returns correct structure."""
@@ -167,8 +201,7 @@ class TestBulkWhatsAppMessage(IntegrationTestCase):
         self.assertIn("percent", progress)
         self.assertEqual(progress["total"], 2)
 
-    @patch("frappe_whatsapp.transport.make_post_request")
-    def test_retry_failed(self, mock_post):
+    def test_retry_failed(self):
         """Test retry_failed enqueues each failed message for re-send."""
         doc = self._make_bulk_message(title="Test Bulk Retry")
         # Create a failed message referencing this bulk
@@ -196,12 +229,9 @@ class TestBulkWhatsAppMessage(IntegrationTestCase):
             call_kwargs = mock_enqueue.call_args.kwargs
             self.assertEqual(call_kwargs.get("message_name"), failed_msg.name)
 
-    @patch("frappe_whatsapp.transport.make_post_request")
-    def test_resend_single_message(self, mock_post):
+    def test_resend_single_message(self):
         """Test the worker entry actually re-sends and persists Success."""
-        mock_post.return_value = {
-            "messages": [{"id": "wamid.bulk_retry_1"}],
-        }
+        self.wamid = "wamid.bulk_retry_1"
 
         doc = self._make_bulk_message(title="Test Bulk Resend Single")
         failed_msg = frappe.get_doc({
@@ -225,7 +255,7 @@ class TestBulkWhatsAppMessage(IntegrationTestCase):
         failed_msg.reload()
         self.assertEqual(failed_msg.status, "Success")
         self.assertEqual(failed_msg.message_id, "wamid.bulk_retry_1")
-        mock_post.assert_called_once()
+        self.assertEqual(self._sent()["to"], "919900112277")
 
     def test_validate_with_recipient_list(self):
         """Test validation with recipient_list type."""

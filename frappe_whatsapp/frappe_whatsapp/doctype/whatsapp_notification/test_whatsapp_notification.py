@@ -2,10 +2,17 @@
 # See license.txt
 
 import json
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import frappe
+from frappe_whatsapp import transport
 from frappe_whatsapp.testing import IntegrationTestCase
+from frappe_whatsapp.frappe_whatsapp.tests.test_native_outbox import Response
+
+# Fictional, but numeric like a real Graph phone-number id: the send fence only
+# scopes /{digits}/messages. Every request is answered by the double in setUp.
+PHONE_ID = "9941102"
+MESSAGES_URL = f"https://graph.facebook.com/v17.0/{PHONE_ID}/messages"
 
 
 class TestWhatsAppNotification(IntegrationTestCase):
@@ -27,7 +34,7 @@ class TestWhatsAppNotification(IntegrationTestCase):
                 "status": "Active",
                 "url": "https://graph.facebook.com",
                 "version": "v17.0",
-                "phone_id": "notif_test_phone_id",
+                "phone_id": PHONE_ID,
                 "business_id": "notif_test_business_id",
                 "app_id": "notif_test_app_id",
                 "webhook_verify_token": "notif_test_verify_token",
@@ -68,6 +75,26 @@ class TestWhatsAppNotification(IntegrationTestCase):
             "is_default_outgoing": 1,
             "is_default_incoming": 1,
         })
+        # Message sends leave through the fence's own requests.request
+        # (transport._message_api), not make_post_request. Double that physical
+        # boundary for every test so nothing can reach Meta.
+        self.wamid = "wamid.notif_unused"
+        self.http = self.enterContext(patch.object(transport.requests, "request", side_effect=self._graph))
+        self.old_post = self.enterContext(patch.object(transport, "make_post_request"))
+
+    def _graph(self, method, url, **kwargs):
+        """Graph accepting the send for the exact recipient it was given."""
+        to = json.loads(kwargs["data"])["to"]
+        return Response(payload={"messaging_product": "whatsapp", "contacts": [{"input": to, "wa_id": to}],
+                                 "messages": [{"id": self.wamid}]})
+
+    def _sent(self):
+        """Body of the single message POST that reached the physical boundary."""
+        self.http.assert_called_once()
+        self.old_post.assert_not_called()
+        args, kwargs = self.http.call_args
+        self.assertEqual(args, ("POST", MESSAGES_URL))
+        return json.loads(kwargs["data"])
 
     def tearDown(self):
         for name in frappe.get_all("WhatsApp Notification", filters={"notification_name": ["like", "Test Notif%"]}, pluck="name"):
@@ -168,18 +195,10 @@ class TestWhatsAppNotification(IntegrationTestCase):
         cached = frappe.cache().get_value("whatsapp_notification_map")
         self.assertFalse(cached)
 
-    @patch("frappe_whatsapp.transport.make_post_request")
-    def test_send_template_message(self, mock_post):
+    def test_send_template_message(self):
         """Test send_template_message sends correct data."""
-        mock_post.return_value = {
-            "messages": [{"id": "wamid.notif_test_1"}],
-            "contacts": [{"wa_id": "919900112233"}]
-        }
-        # Set integration_request flag (used in finally block of notify())
-        frappe.flags.integration_request = MagicMock()
-        frappe.flags.integration_request.json.return_value = {
-            "messages": [{"id": "wamid.notif_test_1"}]
-        }
+        # The fence sets integration_request itself, which notify() reads.
+        self.wamid = "wamid.notif_test_1"
 
         doc = self._make_notification(
             notification_name="Test Notif Send",
@@ -193,25 +212,15 @@ class TestWhatsAppNotification(IntegrationTestCase):
 
         doc.send_template_message(user)
 
-        self.assertTrue(mock_post.called)
-        call_args = mock_post.call_args
-        sent_data = json.loads(call_args.kwargs.get("data", call_args[1].get("data", "")))
+        sent_data = self._sent()
         self.assertEqual(sent_data["messaging_product"], "whatsapp")
         self.assertEqual(sent_data["to"], "919900112233")
         self.assertEqual(sent_data["type"], "template")
         self.assertEqual(sent_data["template"]["name"], "test_notif_template")
 
-    @patch("frappe_whatsapp.transport.make_post_request")
-    def test_send_template_message_with_condition(self, mock_post):
+    def test_send_template_message_with_condition(self):
         """Test that condition evaluation works."""
-        mock_post.return_value = {
-            "messages": [{"id": "wamid.notif_cond_1"}],
-        }
-        # Set integration_request flag (used in finally block of notify())
-        frappe.flags.integration_request = MagicMock()
-        frappe.flags.integration_request.json.return_value = {
-            "messages": [{"id": "wamid.notif_cond_1"}]
-        }
+        self.wamid = "wamid.notif_cond_1"
 
         doc = self._make_notification(
             notification_name="Test Notif Condition",
@@ -224,10 +233,9 @@ class TestWhatsAppNotification(IntegrationTestCase):
         user.mobile_no = "919900112299"
         user.enabled = 1
         doc.send_template_message(user)
-        self.assertTrue(mock_post.called)
+        self.assertEqual(self._sent()["to"], "919900112299")
 
-    @patch("frappe_whatsapp.transport.make_post_request")
-    def test_send_template_message_condition_not_met(self, mock_post):
+    def test_send_template_message_condition_not_met(self):
         """Test that message is not sent when condition is not met."""
         doc = self._make_notification(
             notification_name="Test Notif NoSend",
@@ -240,7 +248,8 @@ class TestWhatsAppNotification(IntegrationTestCase):
         user.enabled = 1
         doc.send_template_message(user)
 
-        self.assertFalse(mock_post.called)
+        self.assertFalse(self.http.called)
+        self.assertFalse(self.old_post.called)
 
     def test_disabled_notification_does_not_send(self):
         """Test that disabled notification does not trigger."""
