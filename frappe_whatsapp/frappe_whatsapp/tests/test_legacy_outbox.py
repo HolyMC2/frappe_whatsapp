@@ -236,6 +236,17 @@ from crm.tests.test_outbox_legacy import LegacyGuardFixture
 
 
 class TestLegacyTransportSql(LegacyGuardFixture):
+    def setUp(self):
+        # The fixture rolls back to its savepoint, so hooks its work queued (outbox
+        # and receipt enqueues) must not fire at a later test's real commit.
+        self.callbacks = list(frappe.db.after_commit._functions)
+        self.addCleanup(self.restore_callbacks)
+        super().setUp()
+
+    def restore_callbacks(self):
+        frappe.db.after_commit._functions.clear()
+        frappe.db.after_commit._functions.extend(self.callbacks)
+
     def test_both_entry_points_and_post_deny_actual_control_before_http(self):
         self.open()
         with patch.object(transport.requests, "request") as http, patch.object(transport, "make_post_request") as old:
@@ -258,7 +269,11 @@ class TestLegacyTransportSql(LegacyGuardFixture):
             self.assertEqual(kwargs["data"], intent.payload.encode())
             return Response(payload={"messaging_product": "whatsapp", "contacts": [{"wa_id": self.peer}],
                                      "messages": [{"id": "wamid.native-through-legacy-guard"}]})
-        with patch.object(frappe.db, "rollback"), patch.object(transport.requests, "request", side_effect=provider) as http:
+        # dispatch_intent owns its transaction and commits at each state change. A
+        # real commit ends the fixture's transaction: its savepoint is gone (MySQL
+        # 1305 on cleanup) and its rows persist. The fence is a lock, not a commit.
+        with patch.object(frappe.db, "rollback"), patch.object(frappe.db, "commit"), \
+                patch.object(transport.requests, "request", side_effect=provider) as http:
             outbox.dispatch_intent(name)
         self.assertEqual(outbox._load(name).state, "Accepted")
         self.assertEqual(http.call_count, 1)
