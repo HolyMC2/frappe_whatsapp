@@ -129,10 +129,23 @@ def _template(value):
                 _string(parameter[kind], 32768, empty=True)
 
 
+def _retailer_id(value):
+    """Local 140-character item-code bound; preserve legitimate internal spaces."""
+    _string(value, 140)
+    _require(value == value.strip() and bool(value.strip()))
+    _require(not any(ord(char) < 32 or ord(char) == 127 for char in value))
+    return value
+
+
 def _interactive(value):
-    _keys(value, {"type", "header", "body", "footer", "action"}, {"type", "body", "action"})
+    _keys(value, {"type", "header", "body", "footer", "action"}, {"type", "action"})
     kind = value["type"]
-    _require(kind in {"button", "list", "flow"})
+    _require(kind in {"button", "list", "flow", "catalog_message", "product", "product_list"})
+    _require(kind == "product" or "body" in value)
+    if kind in {"catalog_message", "product"}:
+        _require("header" not in value)
+    elif kind == "product_list":
+        _require(isinstance(value.get("header"), dict) and value["header"].get("type") == "text")
     for label in ("body", "footer"):
         if label in value:
             _keys(value[label], {"text"}, {"text"})
@@ -175,7 +188,7 @@ def _interactive(value):
                 if "description" in row:
                     _string(row["description"], 72, empty=True)
         _require(total <= 10)
-    else:
+    elif kind == "flow":
         _keys(action, {"name", "parameters"}, {"name", "parameters"})
         _require(action["name"] == "flow")
         params = action["parameters"]
@@ -190,6 +203,38 @@ def _interactive(value):
         _identifier(params["flow_action_payload"]["screen"], 100)
         if "data" in params["flow_action_payload"]:
             _require(isinstance(params["flow_action_payload"]["data"], dict))
+
+    elif kind == "catalog_message":
+        _keys(action, {"name", "parameters"}, {"name"})
+        _require(action["name"] == "catalog_message")
+        # A default thumbnail is represented by absence, never an empty ID or
+        # empty parameters object. Validate frozen bytes without rewriting them.
+        if "parameters" in action:
+            _keys(action["parameters"], {"thumbnail_product_retailer_id"}, {"thumbnail_product_retailer_id"})
+            _retailer_id(action["parameters"]["thumbnail_product_retailer_id"])
+    elif kind == "product":
+        _keys(action, {"catalog_id", "product_retailer_id"}, {"catalog_id", "product_retailer_id"})
+        _number(action["catalog_id"])
+        _retailer_id(action["product_retailer_id"])
+    else:  # product_list
+        _keys(action, {"catalog_id", "sections"}, {"catalog_id", "sections"})
+        _number(action["catalog_id"])
+        sections = action["sections"]
+        _require(isinstance(sections, list) and 1 <= len(sections) <= 10)
+        seen = set()
+        for section in sections:
+            required = {"product_items", "title"} if len(sections) > 1 else {"product_items"}
+            _keys(section, {"title", "product_items"}, required)
+            if "title" in section:
+                _require(bool(_string(section["title"], 24).strip()))
+            products = section["product_items"]
+            _require(isinstance(products, list) and 1 <= len(products) <= 30)
+            for product in products:
+                _keys(product, {"product_retailer_id"}, {"product_retailer_id"})
+                retailer_id = _retailer_id(product["product_retailer_id"])
+                _require(retailer_id not in seen)
+                seen.add(retailer_id)
+                _require(len(seen) <= 30)
 
 
 def _payload(payload, account_id, peer_id):

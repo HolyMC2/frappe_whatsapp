@@ -247,6 +247,185 @@ class TestNativeOutbox(unittest.TestCase):
             self.assertEqual(self.send()["state"], "Accepted")
             self.assertEqual(json.loads(self.post.call_args.kwargs["data"]), self.payload)
 
+    def catalog_payload(self, kind="catalog_message"):
+        actions = {
+            "catalog_message": {"name": "catalog_message"},
+            "product": {"catalog_id": "123456", "product_retailer_id": "SKU uno"},
+            "product_list": {"catalog_id": "123456", "sections": [
+                {"product_items": [{"product_retailer_id": "SKU uno"}]}]},
+        }
+        interactive = {"type": kind, "body": {"text": "Catálogo disponible"}, "action": actions[kind]}
+        if kind == "product_list":
+            interactive["header"] = {"type": "text", "text": "Productos"}
+        return {"messaging_product": "whatsapp", "to": self.intent.peer_id,
+                "type": "interactive", "interactive": interactive}
+
+    def validate_catalog(self, payload):
+        return gateway.validate_payload(payload, account_id=self.intent.account_id, peer_id=self.intent.peer_id)
+
+    def assert_catalog_invalid(self, payload):
+        with self.assertRaisesRegex(ValueError, "^frozen_payload_invalid$"):
+            self.validate_catalog(payload)
+        self.lookup.assert_not_called()
+        self.load.assert_not_called()
+        self.post.assert_not_called()
+        self.authority.assert_not_called()
+
+    def test_catalog_messages_validate_canonical_bytes_without_resolving_or_mutating(self):
+        for kind in ("catalog_message", "product", "product_list"):
+            payload = self.catalog_payload(kind)
+            original = copy.deepcopy(payload)
+            self.assertEqual(json.loads(self.validate_catalog(payload)), original)
+            self.assertEqual(payload, original)
+        self.lookup.assert_not_called()
+        self.load.assert_not_called()
+        self.post.assert_not_called()
+        self.authority.assert_not_called()
+
+    def test_catalog_thumbnail_is_optional_but_empty_or_ambiguous_parameters_are_rejected(self):
+        payload = self.catalog_payload()
+        self.validate_catalog(payload)
+        payload["interactive"]["action"]["parameters"] = {"thumbnail_product_retailer_id": "SKU con espacio"}
+        self.validate_catalog(payload)
+        for parameters in ({}, None, [], {"thumbnail_product_retailer_id": ""},
+                           {"thumbnail_product_retailer_id": "   "},
+                           {"thumbnail_product_retailer_id": "SKU", "catalog_id": "123456"}):
+            with self.subTest(parameters=parameters):
+                payload["interactive"]["action"]["parameters"] = parameters
+                self.assert_catalog_invalid(payload)
+
+    def test_single_product_body_and_footer_are_optional_and_headers_are_forbidden(self):
+        payload = self.catalog_payload("product")
+        del payload["interactive"]["body"]
+        self.validate_catalog(payload)
+        payload["interactive"]["footer"] = {"text": "Consulta disponibilidad"}
+        self.validate_catalog(payload)
+        for kind in ("product", "catalog_message"):
+            payload = self.catalog_payload(kind)
+            for header in ({"type": "text", "text": "Forbidden"}, {"type": "image", "image": {"id": "x"}}, None):
+                payload["interactive"]["header"] = header
+                self.assert_catalog_invalid(payload)
+
+    def test_product_list_requires_a_text_header_and_nonempty_body(self):
+        for header in (None, {}, {"type": "image", "image": {"id": "x"}},
+                       {"type": "text"}, {"type": "text", "text": ""},
+                       {"type": "text", "text": "x" * 61}):
+            payload = self.catalog_payload("product_list")
+            if header is None:
+                del payload["interactive"]["header"]
+            else:
+                payload["interactive"]["header"] = header
+            self.assert_catalog_invalid(payload)
+        for kind in ("catalog_message", "product_list"):
+            payload = self.catalog_payload(kind)
+            del payload["interactive"]["body"]
+            self.assert_catalog_invalid(payload)
+
+    def test_product_list_allows_ten_sections_and_thirty_distinct_products_total(self):
+        payload = self.catalog_payload("product_list")
+        sections = [{"title": f"Section {i}", "product_items": [
+            {"product_retailer_id": f"SKU-{i}-{j}"} for j in range(3)]} for i in range(10)]
+        payload["interactive"]["action"]["sections"] = sections
+        self.assertEqual(json.loads(self.validate_catalog(payload)), payload)
+        sections[-1]["product_items"].append({"product_retailer_id": "thirty-first"})
+        self.assert_catalog_invalid(payload)
+        sections[-1]["product_items"].pop()
+        sections.append({"title": "Eleventh", "product_items": [{"product_retailer_id": "one-more"}]})
+        self.assert_catalog_invalid(payload)
+
+    def test_product_list_titles_are_optional_for_one_section_and_required_for_multiple(self):
+        payload = self.catalog_payload("product_list")
+        self.validate_catalog(payload)
+        sections = payload["interactive"]["action"]["sections"]
+        sections.append({"title": "Second", "product_items": [{"product_retailer_id": "second"}]})
+        self.assert_catalog_invalid(payload)
+        sections[0]["title"] = "T" * 24
+        self.validate_catalog(payload)
+        for title in ("", "   ", "T" * 25, None, []):
+            sections[0]["title"] = title
+            self.assert_catalog_invalid(payload)
+
+    def test_product_list_rejects_duplicate_skus_within_and_across_sections(self):
+        payload = self.catalog_payload("product_list")
+        sections = payload["interactive"]["action"]["sections"]
+        sections[0]["product_items"].append({"product_retailer_id": "SKU uno"})
+        self.assert_catalog_invalid(payload)
+        sections[0]["product_items"].pop()
+        sections[0]["title"] = "One"
+        sections.append({"title": "Two", "product_items": [{"product_retailer_id": "SKU uno"}]})
+        self.assert_catalog_invalid(payload)
+
+    def test_product_ids_remain_exact_and_blank_control_or_overlong_ids_are_rejected(self):
+        for sku in ("SKU con espacio", "áéñ-零", "x" * 140):
+            payload = self.catalog_payload("product")
+            payload["interactive"]["action"]["product_retailer_id"] = sku
+            self.assertEqual(json.loads(self.validate_catalog(payload))["interactive"]["action"]["product_retailer_id"], sku)
+        for sku in ("", " ", " SKU", "SKU ", "SKU\tuno", "SKU\nuno", "SKU\x7f", "x" * 141, None, 123, True, []):
+            for kind in ("product", "product_list", "catalog_message"):
+                payload = self.catalog_payload(kind)
+                action = payload["interactive"]["action"]
+                if kind == "product":
+                    action["product_retailer_id"] = sku
+                elif kind == "product_list":
+                    action["sections"][0]["product_items"][0]["product_retailer_id"] = sku
+                else:
+                    action["parameters"] = {"thumbnail_product_retailer_id": sku}
+                self.assert_catalog_invalid(payload)
+        for catalog in ("", " ", "123 ", "abc", 123, True, [], "1" * 41):
+            payload = self.catalog_payload("product")
+            payload["interactive"]["action"]["catalog_id"] = catalog
+            self.assert_catalog_invalid(payload)
+
+    def test_catalog_subobjects_reject_unknown_keys_without_frozen_payload_rewriting(self):
+        for kind in ("catalog_message", "product", "product_list"):
+            for path in ((), ("action",), ("body",)):
+                payload = self.catalog_payload(kind)
+                node = payload["interactive"]
+                for key in path:
+                    node = node[key]
+                node["unrecognized"] = "never sent"
+                original = copy.deepcopy(payload)
+                self.assert_catalog_invalid(payload)
+                self.assertEqual(payload, original)
+        for path in (("header",), ("action", "sections", 0),
+                     ("action", "sections", 0, "product_items", 0)):
+            payload = self.catalog_payload("product_list")
+            node = payload["interactive"]
+            for key in path:
+                node = node[key]
+            node["unrecognized"] = "never sent"
+            self.assert_catalog_invalid(payload)
+        payload = self.catalog_payload()
+        payload["interactive"]["action"]["name"] = "other_action"
+        self.assert_catalog_invalid(payload)
+
+    def test_catalog_text_bounds_and_malformed_sections_fail_before_provider_lookup(self):
+        for kind in ("catalog_message", "product", "product_list"):
+            payload = self.catalog_payload(kind)
+            payload["interactive"]["body"]["text"] = "B" * 1024
+            payload["interactive"]["footer"] = {"text": "F" * 60}
+            self.validate_catalog(payload)
+            payload["interactive"]["body"]["text"] += "!"
+            self.assert_catalog_invalid(payload)
+            payload["interactive"]["body"]["text"] = "Valid"
+            payload["interactive"]["footer"]["text"] += "!"
+            self.assert_catalog_invalid(payload)
+        for sections in (None, {}, [], [None], [{}], [{"product_items": []}],
+                         [{"product_items": {}}], [{"product_items": [None]}],
+                         [{"product_items": [{}]}]):
+            payload = self.catalog_payload("product_list")
+            payload["interactive"]["action"]["sections"] = sections
+            self.assert_catalog_invalid(payload)
+
+    def test_catalog_payloads_use_existing_frozen_submission_path_with_fake_provider_only(self):
+        for kind in ("catalog_message", "product", "product_list"):
+            self.payload = self.catalog_payload(kind)
+            self.post.return_value = self.success()
+            self.assertEqual(self.send()["state"], "Accepted")
+            self.assertEqual(json.loads(self.post.call_args.kwargs["data"]), self.payload)
+            self.assertIs(self.post.call_args.args[0], self.account)
+        self.assertEqual(self.post.call_count, 3)
+
     def test_definitive_graph_rejection_is_failed_and_safe(self):
         for status in (400, 401, 403, 404, 409, 429):
             self.post.return_value = Response(status, {"error": {"code": 190, "message": "secret token and customer body", "error_data": {"secret": "value"}}})
