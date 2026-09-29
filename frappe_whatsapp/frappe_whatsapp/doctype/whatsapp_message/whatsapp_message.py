@@ -285,10 +285,12 @@ class WhatsAppMessage(Document):
 
         parameters = []
         template_parameters = []
-        if template_vars.placeholders(template.template) and not self.flags.custom_ref_doc:
-            # One contract with the manual (wa.me) path: explicit values are checked,
-            # otherwise the template's mapping is resolved against the reference.
-            # A missing value blocks the send; sample values are never sent.
+        if template.template and not self.flags.custom_ref_doc:
+            # One contract with the manual (wa.me) path: explicit values (body_param,
+            # e.g. campaign steps) win and are checked; otherwise the template's
+            # mapping is resolved against the reference. A body without {{n}} sends
+            # zero parameters. A missing value blocks the send; sample values are
+            # never sent. Only a name-only row (no local body) keeps the legacy path.
             if self.body_param:
                 result = template_vars.check_values(template.name, json.loads(self.body_param))
             else:

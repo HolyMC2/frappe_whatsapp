@@ -38,6 +38,8 @@ send (`WhatsApp Message.send_template`) and every manual wa.me prefill call it, 
 | `doco.docoutils.whatsapp_template_context.SALES_ORDER` | Sales Order | order_id, order_total, customer_name, customer_contact, fulfillment |
 | `doco_marketing.services.whatsapp_template_context.SALES_ORDER` | Sales Order | customer_first_name, order_short_id, shop_name, checkout_url, order_items_summary, first_item_name |
 | `doco_marketing…STOREFRONT_LEAD` | Storefront Lead | product_name, shop_name, product_url |
+| `doco_marketing…CUSTOMER` | Customer | customer_first_name, customer_name, coupon_code, coupon_benefits, coupon_valid_until (template broadcasts reference the Customer) |
+| `doco_marketing…CRM_COUPONS` | CRM Lead, CRM Deal | the coupon keys, from the Customer behind the record (Deal.erpnext_customer, or the registration touchpoint of a Lead) |
 
 Why extend `field_names` instead of a new store: it is already the column
 `send_template`, the CRM composer's mapping editor (`set_template_field_map`) and
@@ -68,6 +70,16 @@ differently per campaign.
 | cupon_registro | customer_first_name, coupon_code, coupon_benefits, coupon_valid_until |
 | bienvenida_credito | none: no sender and no credit-sale record to read from (see below) |
 
+Where the meaning of each `{{n}}` comes from (the sender defines it): no code
+names `pedido_*` or `cupon_registro`. The storefront picks `pedido_*` through
+per-shop settings (`storefront_buyer_wa_templates` per event,
+`storefront_operator_wa_template`), and `storefront_notify` has always sent
+`{{1}}` order, `{{2}}` total (the operator alert adds customer, contact and
+pick-up/delivery). The registration program picks `cupon_registro` through
+`CRM Campaign.registration_template`, and `registration._message_context` sends
+first name, the customer's code, benefits and valid-until date. `bienvenida_credito`
+has no sender in any repository.
+
 ## Inventory before this change (doco, 2026-09-29)
 
 Evidence: doco-mirror (prod data as of 2026-08-30) and the code on mainline.
@@ -91,6 +103,14 @@ All 20 business templates had `field_names` empty.
 | cupon_registro | doco_marketing registration (program's `registration_template`) | empty `{{4}}` when the coupon has no end date | as above |
 | bienvenida_credito | no sender in any repo (CRM composer only) | composer prefilled samples («Juan», «Samsung A10») | blocked |
 | any | Review queue row without body_param | `send_template` read sample values as fieldnames → empty params, Meta rejects | — |
+
+## Invariants other senders rely on
+
+- Explicit `body_param` always wins over the mapping and the reference (campaign
+  steps, broadcasts with a fixed body_param, Taller, storefront).
+- A body without `{{n}}` sends zero parameters, whatever `sample_values` holds.
+- CRM's composer refuses a send while any variable is empty, in the UI and in
+  `send_whatsapp_template` itself, so it is safe on any frappe_whatsapp version.
 
 ## After
 

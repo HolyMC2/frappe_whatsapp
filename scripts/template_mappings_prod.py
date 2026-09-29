@@ -11,13 +11,15 @@ contavm):
 Self-contained on purpose: the dry run also works BEFORE the code roll, to review
 exactly what the roll's migrate will fill (frappe_whatsapp's after_migrate applies
 the same rules: fill `field_names` only when it is empty and the body has as many
-variables as the mapping). Apply refuses to run on a site without the contract
+variables as the mapping). Rows are matched by template_name (or Meta actual_name);
+anything it does not recognise is listed and never touched. Sample values are
+printed only for review; they are never used as values. Apply refuses to run on a site without the contract
 (`frappe_whatsapp.template_vars`): the old send path would read these keys as
 fieldnames and send empty parameters.
 
-The console reads this file statement by statement (and functions defined there
-do not see its globals), so the script is flat top-level code with no blank lines
-inside a block. Keep MAPPINGS equal to the apps' DEFAULT_MAPPINGS (taller, doco,
+The console reads this file statement by statement, and functions, generators and
+comprehensions defined there do not see its globals: the script is flat top-level
+code (plain loops only) with no blank lines inside a block. Keep MAPPINGS equal to the apps' DEFAULT_MAPPINGS (taller, doco,
 doco_marketing); the script reports any drift when the code is installed.
 """
 
@@ -58,7 +60,10 @@ except ImportError:
 	CONTRACT = None
 if CONTRACT:
 	SHIPPED = CONTRACT.default_mappings()
-	DRIFT = {k: (v, SHIPPED.get(k)) for k, v in MAPPINGS.items() if SHIPPED.get(k) != v}
+	DRIFT = []
+	for K, V in MAPPINGS.items():
+		if SHIPPED.get(K) != V:
+			DRIFT.append((K, V, SHIPPED.get(K)))
 	print("code defaults match this script" if not DRIFT else f"DRIFT script vs code: {DRIFT}")
 if APPLY and not CONTRACT:
 	print("REFUSED: frappe_whatsapp.template_vars is not installed on this site; roll the code first.")
@@ -67,23 +72,29 @@ print(f"[{'APPLY' if APPLY else 'DRY RUN'}] {frappe.local.site}")
 COUNTS = {}
 for row in ([] if APPLY is None else frappe.get_all(
 	"WhatsApp Templates",
-	fields=["name", "template_name", "actual_name", "status", "template", "field_names"],
+	fields=["name", "template_name", "actual_name", "status", "template", "field_names", "sample_values"],
 	order_by="name asc",
 )):
-	mapping = MAPPINGS.get((row.actual_name or row.template_name or "").strip())
+	mapping = MAPPINGS.get((row.template_name or "").strip()) or MAPPINGS.get((row.actual_name or "").strip())
 	before = (row.field_names or "").strip()
-	slots = len({int(n) for n in re.findall(r"\{\{\s*(\d+)\s*\}\}", row.template or "")})
-	after, action = before, "no default"
+	slots = len(set(re.findall(r"\{\{\s*(\d+)\s*\}\}", row.template or "")))
+	wanted = len(mapping.split(",")) if mapping else None
+	after, action = before, "UNRECOGNISED (not touched)"
 	if mapping and before:
 		action = "already set" if before == mapping else "kept (tenant mapping)"
-	elif mapping and slots != len(mapping.split(",")):
-		action = f"SKIPPED: body has {slots} vars, mapping {len(mapping.split(','))}"
+	elif mapping and slots != wanted:
+		action = "SKIPPED: var count mismatch"
 	elif mapping:
 		after, action = mapping, ("filled" if APPLY else "would fill")
 	if APPLY and action == "filled":
 		frappe.db.set_value("WhatsApp Templates", row.name, "field_names", mapping, update_modified=False)
-	COUNTS[action.split(":")[0]] = COUNTS.get(action.split(":")[0], 0) + 1
-	print(f"  {row.name:<30} {row.status or '':<17} {action:<22} before={before!r} after={after!r}")
+	COUNTS[action] = COUNTS.get(action, 0) + 1
+	check = "n/a" if wanted is None else ("ok" if slots == wanted else "MISMATCH")
+	print(f"- {row.name} [{row.status or ''}] {action}")
+	print(f"    vars in body={slots} mapping expects={wanted if wanted is not None else '-'} check={check}")
+	print(f"    current={before!r}")
+	print(f"    proposed={after!r}")
+	print(f"    sample_values={(row.sample_values or '')!r}")
 print("summary:", COUNTS)
 if APPLY:
 	frappe.db.commit()

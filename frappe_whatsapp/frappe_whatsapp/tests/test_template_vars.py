@@ -198,3 +198,19 @@ class TestSendTemplateUsesTheContract(IntegrationTestCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "cannot be filled"):
 			self._message(tpl, body_param=json.dumps({"1": "Ana", "2": ""})).insert(ignore_permissions=True)
 		self.http.assert_not_called()
+
+	def test_explicit_body_param_wins_over_mapping_and_reference(self):
+		"""Campaign steps (doco_marketing) send their own values with a reference."""
+		self.wamid = "wamid.tv_priority"
+		tpl = _template(f"{PREFIX}send_prio", "Hola {{1}}", field_names="first_name")
+		self._message(tpl, reference_doctype="User", reference_name="Administrator",
+			body_param=json.dumps({"1": "Campaña"})).insert(ignore_permissions=True)
+		params = [p["text"] for p in self._sent()["template"]["components"][0]["parameters"]]
+		self.assertEqual(params, ["Campaña"])
+
+	def test_a_template_without_variables_sends_zero_parameters(self):
+		"""Zero-variable campaign templates go out with a reference and no body_param."""
+		self.wamid = "wamid.tv_zero"
+		tpl = _template(f"{PREFIX}send_zero", "Ya abrimos, te esperamos.", sample_values="Juan")
+		self._message(tpl, reference_doctype="User", reference_name="Administrator").insert(ignore_permissions=True)
+		self.assertEqual(self._sent()["template"]["components"][0]["parameters"], [])
