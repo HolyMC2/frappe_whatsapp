@@ -33,7 +33,7 @@ MAPPINGS = {
 	"orden_recibida": "customer_first_name,repair_order,tracking_url",
 	"equipo_listo": "customer_first_name,repair_order",
 	"entregado": "customer_first_name,repair_order,device_model",
-	"diagnostico_listo": "customer_first_name,repair_order,diagnosis,quote_amount:number,promised_date",
+	"diagnostico_listo": "customer_first_name,repair_order,diagnosis,quote_amount:number,promised_in_days",
 	"espera_de_pieza": "customer_first_name,repair_order,parts_eta",
 	"recordatorio_recoleccion": "customer_first_name,repair_order,days_in_shop,pickup_deadline",
 	"reparacion_no_viable": "customer_first_name,repair_order,diagnosis",

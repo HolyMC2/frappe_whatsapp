@@ -32,7 +32,7 @@ send (`WhatsApp Message.send_template`) and every manual wa.me prefill call it, 
 
 | Hook entry | Doctype | Keys |
 |---|---|---|
-| `taller.services.wa_template_context.REPAIR_ORDER` | Repair Order | customer_first_name, customer_name, repair_order, device_model, tracking_url, diagnosis, quote_amount, promised_date, parts_eta, days_in_shop, pickup_deadline, warranty_expires_on, shop_name |
+| `taller.services.wa_template_context.REPAIR_ORDER` | Repair Order | customer_first_name, customer_name, repair_order, device_model, tracking_url, diagnosis, quote_amount, promised_date, promised_in_days, parts_eta, days_in_shop, pickup_deadline, warranty_expires_on, shop_name |
 | `taller…CRM_DEAL` | CRM Deal | the repair keys, from the Deal's latest Repair Order (folio = order, never the deal id) |
 | `crm.api.whatsapp_template_context.CRM_DEAL / CRM_LEAD` | CRM Deal, CRM Lead | customer_first_name, customer_name |
 | `doco.docoutils.whatsapp_template_context.SALES_ORDER` | Sales Order | order_id, order_total, customer_name, customer_contact, fulfillment |
@@ -55,7 +55,7 @@ differently per campaign.
 | orden_recibida | customer_first_name, repair_order, tracking_url |
 | equipo_listo | customer_first_name, repair_order |
 | entregado | customer_first_name, repair_order, device_model |
-| diagnostico_listo | customer_first_name, repair_order, diagnosis, quote_amount:number, promised_date |
+| diagnostico_listo | customer_first_name, repair_order, diagnosis, quote_amount:number, promised_in_days |
 | espera_de_pieza | customer_first_name, repair_order, parts_eta |
 | recordatorio_recoleccion | customer_first_name, repair_order, days_in_shop, pickup_deadline |
 | reparacion_no_viable | customer_first_name, repair_order, diagnosis |
