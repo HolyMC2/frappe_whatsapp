@@ -8,7 +8,11 @@
  "field_order": [
   "default_incoming_account",
   "column_break_xsuw",
-  "default_outgoing_account"
+  "default_outgoing_account",
+  "sb_channel",
+  "channel_mode",
+  "column_break_channel",
+  "shop_whatsapp_number"
  ],
  "fields": [
   {
@@ -26,13 +30,37 @@
   {
    "fieldname": "column_break_skjo",
    "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "sb_channel",
+   "fieldtype": "Section Break",
+   "label": "Canal con clientes"
+  },
+  {
+   "fieldname": "channel_mode",
+   "fieldtype": "Select",
+   "label": "Canal de WhatsApp",
+   "options": "Auto\nManual\nOff",
+   "default": "Auto",
+   "description": "Una sola opción para Taller, CRM y Marketing. Auto: la cuenta saliente por defecto si está activa; si no, el personal abre WhatsApp en su dispositivo con el mensaje listo (wa.me). Manual: siempre wa.me, el servidor nunca envía. Off: sin acciones de WhatsApp."
+  },
+  {
+   "fieldname": "column_break_channel",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "shop_whatsapp_number",
+   "fieldtype": "Data",
+   "options": "Phone",
+   "label": "Número de WhatsApp del negocio",
+   "description": "En modo manual se muestra al personal para que envíe desde el número del negocio y no desde uno personal."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2025-12-01 13:22:14.262545",
+ "modified": "2026-09-29 13:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Whatsapp",
  "name": "WhatsApp Settings",

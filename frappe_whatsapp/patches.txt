@@ -8,3 +8,4 @@
 # the legacy phone_id/business_id/etc. before they're lost.
 frappe_whatsapp.patches.migrate_to_multi_account
 frappe_whatsapp.patches.set_default_in_whatsapp_settings
+frappe_whatsapp.patches.unify_channel_mode
