@@ -5,7 +5,7 @@ import frappe
 from frappe import _, throw
 from frappe.model.document import Document
 
-from frappe_whatsapp import transport
+from frappe_whatsapp import template_vars, transport
 from frappe_whatsapp.utils import get_whatsapp_account, format_number
 
 class WhatsAppMessage(Document):
@@ -285,7 +285,24 @@ class WhatsAppMessage(Document):
 
         parameters = []
         template_parameters = []
-        if template.sample_values:
+        if template_vars.placeholders(template.template) and not self.flags.custom_ref_doc:
+            # One contract with the manual (wa.me) path: explicit values are checked,
+            # otherwise the template's mapping is resolved against the reference.
+            # A missing value blocks the send; sample values are never sent.
+            if self.body_param:
+                result = template_vars.check_values(template.name, json.loads(self.body_param))
+            else:
+                ref_doc = None
+                if self.reference_doctype and self.reference_name:
+                    ref_doc = frappe.get_doc(self.reference_doctype, self.reference_name)
+                result = template_vars.resolve(template.name, ref_doc)
+            if not result.ok:
+                frappe.throw(result.reason(), title=_("WhatsApp template not sent"))
+            for key in template_vars.numeric_keys(result.values):
+                parameters.append({"type": "text", "text": result.values[key]})
+                template_parameters.append(result.values[key])
+            self.template_parameters = json.dumps(template_parameters)
+        elif template.sample_values:
             field_names = template.field_names.split(",") if template.field_names else template.sample_values.split(",")
 
             if self.body_param is not None:

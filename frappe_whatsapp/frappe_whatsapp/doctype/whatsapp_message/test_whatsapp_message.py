@@ -338,6 +338,10 @@ class TestWhatsAppMessage(IntegrationTestCase):
             }).db_insert()
             frappe.db.commit()  # nosemgrep: frappe-manual-commit -- test fixture must be visible to later queries
 
+        # {{1}} is filled from the reference (template contract); a template
+        # variable without a mapping would block the send.
+        frappe.db.set_value("WhatsApp Templates", "test_msg_template-en", "field_names", "first_name")
+
         from frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_message.whatsapp_message import send_template
         send_template(
             to="919900112263",

@@ -67,6 +67,10 @@ app_include_js = "/assets/frappe_whatsapp/js/frappe_whatsapp.js"
 # before_install = "frappe_whatsapp.install.before_install"
 # after_install = "frappe_whatsapp.install.after_install"
 
+# Templates synced from Meta before an app shipped its variable mapping get it
+# once the code arrives (template_vars.seed_default_mappings; never overwrites).
+after_migrate = ["frappe_whatsapp.template_vars.after_migrate"]
+
 # Uninstallation
 # ------------
 

@@ -36,6 +36,9 @@ class WhatsAppTemplates(Document):  # nosemgrep: frappe-modifying-but-not-commit
         return (self.get("channel_scope") or "") == "freeform"
 
     def validate(self):
+        from frappe_whatsapp.template_vars import apply_default_mapping
+
+        apply_default_mapping(self)
         if self.is_freeform():
             # No account, no language round-trip, no Meta update: a freeform body
             # is rendered locally by the composer and tapped by a human.
@@ -456,6 +459,11 @@ def fetch():
 
                             doc.append("buttons", btn)
 
+                # Hooks are skipped here, so the shipped variable mapping is applied
+                # explicitly (only when the row has none).
+                from frappe_whatsapp.template_vars import apply_default_mapping
+
+                apply_default_mapping(doc)
                 upsert_doc_without_hooks(doc, "WhatsApp Button", "buttons")
 
         except Exception as e:
