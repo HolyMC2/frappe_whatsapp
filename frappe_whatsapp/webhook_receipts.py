@@ -114,6 +114,25 @@ def _eligible(row, now):
     return not row.next_attempt_at or get_datetime(row.next_attempt_at) <= now
 
 
+# Extension point: handlers persist domain work INSIDE the receipt transaction.
+# They must not commit, dispatch, send or change the receipt worker's identity.
+# True claims media retrieval; the handler must carry media_id + phone_id to its job.
+def incoming_committed(message):
+    deferred = False
+    for handler in frappe.get_hooks("whatsapp_incoming_committed"):
+        deferred = bool(frappe.get_attr(handler)(message)) or deferred
+    return deferred
+
+
+def incoming_is_live():
+    """Retries and old live messages remain live; sync/standby never dispatch."""
+    name = frappe.flags.get("meta_webhook_receipt")
+    if not name:
+        return not frappe.flags.get("meta_webhook_replay")
+    kind = frappe.db.get_value(DOCTYPE, name, "event_type") or ""
+    return kind == "message"
+
+
 def _consumer(row):
     if row.provider == "WhatsApp":
         from frappe_whatsapp.utils.webhook import consume_receipt

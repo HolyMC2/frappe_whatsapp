@@ -115,6 +115,29 @@ def consume_receipt(receipt):
 	return {"state": "Processed", "reason_code": (activity or {}).get("reason_code", "")}
 
 
+# Assistant/domain seam: a snapshot with media identity, never account credentials.
+def _incoming_extension(message, account, phone_id):
+	from frappe_whatsapp.webhook_receipts import incoming_committed, incoming_is_live
+
+	media = message.get(message.get("type")) or {}
+	interactive = message.get("interactive") or {}
+	button = interactive.get("button_reply") or interactive.get("list_reply") or {}
+	error = next((e for e in message.get("errors", []) if str(e.get("code")) == "131052"), None)
+	name = frappe.db.get_value("WhatsApp Message", {"message_id": message["id"], "whatsapp_account": account.name})
+	stored = frappe.db.get_value("WhatsApp Message", name, ["attach", "content_type", "message"], as_dict=True) if name else {}
+	stored = stored or {}
+	return incoming_committed({
+		"type": "Incoming", "name": name, "from": message.get("from"),
+		"message_id": message["id"], "whatsapp_account": account.name, "phone_id": phone_id,
+		"content_type": stored.get("content_type") or ("button" if button else message.get("type")),
+		"message": stored.get("message") or button.get("id") or media.get("body") or media.get("caption") or "",
+		"media_id": media.get("id"), "filename": media.get("filename"),
+		"attach": stored.get("attach"),
+		"error_code": error.get("code") if error else None,
+		"live": incoming_is_live(),
+	})
+
+
 def process_change(scoped):
 	"""Internal consumer. Only called after full-envelope authentication."""
 	value = scoped.change["value"]
@@ -133,7 +156,15 @@ def process_change(scoped):
 			message_type = message['type']
 			is_reply = True if message.get('context') and 'forwarded' not in message.get('context') else False
 			reply_to_message_id = message['context']['id'] if is_reply else None
-			if message_type == 'text':
+			if any(str(e.get("code")) == "131052" for e in message.get("errors", [])):
+				# Inbound oversized media has no downloadable media object.
+				frappe.get_doc({
+					"doctype": "WhatsApp Message", "type": "Incoming", "from": message['from'],
+					"message_id": message['id'], "message": "[131052] Media file size too big",
+					"content_type": "text", "whatsapp_account": whatsapp_account.name,
+					"failure_reason": "131052: Media file size too big",
+				}).insert(ignore_permissions=True)
+			elif message_type == 'text':
 				frappe.get_doc({
 					"doctype": "WhatsApp Message",
 					"type": "Incoming",
@@ -269,6 +300,10 @@ def process_change(scoped):
 					"whatsapp_account":whatsapp_account.name
 				}).insert(ignore_permissions=True)
 
+				# Domain hook persists a media-id job before native buffering/File creation.
+				if _incoming_extension(message, whatsapp_account, (value.get("metadata") or {}).get("phone_number_id")):
+					continue
+
 				try:
 					token = whatsapp_account.get_password("token")
 					url = f"{whatsapp_account.url}/{whatsapp_account.version}/"
@@ -344,6 +379,9 @@ def process_change(scoped):
 					"profile_name":sender_profile_name,
 					"whatsapp_account":whatsapp_account.name
 				}).insert(ignore_permissions=True)
+
+			# Domain extension runs after attach is set, still in the receipt transaction.
+			_incoming_extension(message, whatsapp_account, (value.get("metadata") or {}).get("phone_number_id"))
 
 			# CTWA (Click-To-WhatsApp ad) attribution. Meta hangs the ad referral on the
 			# inbound message; stamp it onto the row we just created (matched by message_id)
