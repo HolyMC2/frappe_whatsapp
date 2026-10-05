@@ -125,6 +125,8 @@ class WhatsAppMessage(Document):
 
         from frappe_whatsapp.coexistence import assert_sendable
         assert_sendable(self)
+        self._assert_native_route()
+        self._run_send_guards()
 
         if self.message_type != "Template":
             if self.attach and not self.attach.startswith("http"):
@@ -147,8 +149,9 @@ class WhatsAppMessage(Document):
                 # 2026-07-11). Oversized media mirrors the phone app: videos
                 # >16MB transcode to 720p when ffmpeg exists; still-too-big (or
                 # images >5MB) fall back to a document send (100MB cap).
-                # External URLs (signed B2 etc.) keep the link path; upload
-                # failure falls back to the old link send.
+                # External URLs (signed B2 etc.) keep the link path; a public
+                # file's upload failure falls back to the old link send. A
+                # private file never becomes a link: its send fails instead.
                 media_id, sent_as = self._upload_local_media()
                 if media_id:
                     if sent_as != self.content_type:
@@ -156,8 +159,10 @@ class WhatsAppMessage(Document):
                         data["type"] = sent_as
                     payload = {"id": media_id, "caption": self.message}
                     if sent_as == "document" and self.attach:
-                        payload["filename"] = self.attach.rsplit("/", 1)[-1]
+                        payload["filename"] = self._document_filename()
                     data[sent_as] = payload
+                elif self._private_attach():
+                    frappe.throw(_("No se pudo cargar el archivo privado a WhatsApp. Vuelve a intentar el envío; el archivo sigue guardado."))
                 else:
                     data[self.content_type.lower()] = {
                         "link": link,
@@ -436,6 +441,25 @@ class WhatsAppMessage(Document):
 
         self.notify(data)
 
+    def _private_attach(self):
+        """A site-private file: it may only reach Meta as an uploaded media id."""
+        attach = (self.attach or "").strip()
+        site_url = frappe.utils.get_url()
+        if attach.startswith(site_url):
+            attach = attach[len(site_url):]
+        return attach.lstrip("/").startswith("private/")
+
+    def _document_filename(self):
+        """The name the customer sees: explicit, else the File row's, else the URL's."""
+        from pathlib import PurePosixPath
+        from urllib.parse import unquote, urlsplit
+
+        explicit = (self.get("attach_filename") or "").strip()
+        if explicit and len(explicit) <= 255 and not any(c in explicit for c in "/\\"):
+            return explicit
+        stored = frappe.db.get_value("File", {"file_url": self.attach}, "file_name")
+        return stored or PurePosixPath(unquote(urlsplit(self.attach).path)).name
+
     # Cloud API hard caps (Meta rejects bigger uploads outright).
     MAX_VIDEO_BYTES = 16 * 1024 * 1024
     MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -475,14 +499,8 @@ class WhatsAppMessage(Document):
         if attach.startswith("http"):
             return None, send_as  # genuinely external — keep the link path
 
-        rel = attach.lstrip("/")
-        if rel.startswith("private/files/"):
-            path = frappe.get_site_path("private", "files", rel[len("private/files/"):])
-        elif rel.startswith("files/"):
-            path = frappe.get_site_path("public", "files", rel[len("files/"):])
-        else:
-            return None, send_as
-        if not os.path.exists(path):
+        path = self._site_file("/" + attach.lstrip("/"))
+        if not path:
             return None, send_as
 
         mime = mime_type or mimetypes.guess_type(path)[0] or "application/octet-stream"
@@ -612,6 +630,7 @@ class WhatsAppMessage(Document):
         )
         if self._defer_to_native(whatsapp_account, data):
             return
+        self._assert_native_route(deferred=False)
         token = whatsapp_account.get_password("token")
 
         headers = {
@@ -648,6 +667,87 @@ class WhatsAppMessage(Document):
             ).insert(ignore_permissions=True)
 
             frappe.throw(msg=error_message, title=res.get("error_user_title", "Error"))
+
+    def _run_send_guards(self):
+        """The business apps' sender policy at the one pre-effect boundary every
+        outgoing send crosses (API insert, CRM composer, templates, bulk retry):
+        before any upload, queueing or Meta request. Ordinary chat passes; apps
+        decide which documents need which authority."""
+        for path in frappe.get_hooks("whatsapp_document_send_guard") or []:
+            frappe.get_attr(path)(
+                message=self,
+                reference_doctype=self.get("reference_doctype"),
+                reference_name=self.get("reference_name"),
+                template=self.get("template") if self.get("message_type") == "Template" else None,
+                attach=self.get("attach"),
+                whatsapp_account=self.get("whatsapp_account"),
+            )
+
+    def _site_file(self, attach):
+        """The confined on-disk path of a site file this sender may read.
+
+        None for a public path that does not exist (legacy link fallback) or a
+        non-file URL. A private file needs its exact File row and read permission
+        on it (which follows the document it is attached to); a path that leaves
+        the site's files directory is refused. Nothing is opened before this.
+        """
+        from pathlib import Path
+        from urllib.parse import unquote, urlsplit
+
+        url = unquote(urlsplit(attach).path)
+        if url.startswith("/private/files/"):
+            private, prefix = True, "/private/files/"
+        elif url.startswith("/files/"):
+            private, prefix = False, "/files/"
+        else:
+            return None
+        base = Path(frappe.get_site_path("private" if private else "public", "files")).resolve()
+        path = (base / url[len(prefix):]).resolve()
+        if not path.is_relative_to(base):
+            frappe.throw(_("Ese archivo no es un adjunto del sistema. Adjunta el documento de nuevo."))
+        # An alias (./, //, x/.., an encoded separator) is refused, never resolved:
+        # the business guard judged the File of the URL as written.
+        canonical = prefix + str(path.relative_to(base))
+        if canonical != url:
+            frappe.throw(
+                _("Ese archivo no tiene una dirección válida del sistema. Adjunta el documento de nuevo."),
+                frappe.PermissionError,
+            )
+        if not private:
+            return str(path) if path.is_file() else None
+        name = frappe.db.get_value("File", {"file_url": canonical, "is_private": 1}, "name")
+        if not name or not frappe.has_permission("File", "read", doc=name):
+            frappe.throw(
+                _("No puedes enviar ese archivo: no existe en el sistema o no tienes acceso al documento al que pertenece."),
+                frappe.PermissionError,
+            )
+        if not path.is_file():
+            frappe.throw(_("El archivo ya no está disponible. Adjunta el documento de nuevo."))
+        return str(path)
+
+    def _assert_native_route(self, deferred=None):
+        """A producer that promised a durable send (`flags.require_native`) never
+        falls back to a synchronous legacy POST: before any upload it needs a
+        governing native conversation, and at notify time the send must defer."""
+        if not self.flags.get("require_native"):
+            return
+        if deferred is False:
+            governed = False
+        else:
+            governed = "crm" in frappe.get_installed_apps()
+            if governed:
+                try:
+                    from crm.api.outbox_bridge import governing_conversation
+                except ImportError:
+                    governed = False
+                else:
+                    account = frappe.get_doc("WhatsApp Account", self.whatsapp_account)
+                    governed = bool(governing_conversation(account, format_number(self.to)))
+        if not governed:
+            frappe.throw(
+                _("La conversación de este cliente ya no está conectada a esta cuenta. No se envió nada; vuelve a abrir Enviar para elegir otra opción."),
+                title=_("Mensaje no enviado"),
+            )
 
     def _defer_to_native(self, account, data):
         """Hand this send to CRM's native outbox when a native conversation governs
@@ -738,6 +838,9 @@ def send_template(to, reference_doctype, reference_name, template, attach=None,
     """Legacy form entry point; optional transport inputs also support document templates."""
     reference = frappe.get_doc(reference_doctype, reference_name)
     reference.check_permission("read")
+    if attach:
+        _check_attach_access(attach, reference)
+    # Business sender policy runs in send_outgoing for this and every other path.
     doc = frappe.get_doc({
         "doctype": "WhatsApp Message",
         "to": to,
@@ -753,3 +856,32 @@ def send_template(to, reference_doctype, reference_name, template, attach=None,
         "whatsapp_account": whatsapp_account,
     })
     doc.save()
+    return {"name": doc.name, "status": doc.status}
+
+
+def _check_attach_access(attach, reference):
+    """A caller may only send a site file it can read that belongs to the reference.
+
+    Without this a reference-readable user could name any private file on the
+    site (another customer's invoice) and have it uploaded to Meta.
+    """
+    from urllib.parse import unquote, urlsplit
+
+    site = urlsplit(frappe.utils.get_url())
+    parts = urlsplit(attach)
+    if parts.scheme and parts.netloc != site.netloc:
+        return  # an external link: nothing of ours is uploaded
+    path = unquote(parts.path)
+    if not (path.startswith("/files/") or path.startswith("/private/files/")):
+        return  # signed print endpoints carry their own authorization
+    rows = frappe.get_all(
+        "File",
+        filters={"file_url": path, "attached_to_doctype": reference.doctype, "attached_to_name": reference.name},
+        pluck="name",
+        limit=1,
+    )
+    if not rows or not frappe.has_permission("File", "read", doc=rows[0]):
+        frappe.throw(
+            _("Ese archivo no pertenece a este documento o no puedes leerlo. Adjunta el PDF desde el documento y vuelve a enviar."),
+            frappe.PermissionError,
+        )

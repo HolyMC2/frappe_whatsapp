@@ -71,6 +71,10 @@ app_include_js = "/assets/frappe_whatsapp/js/frappe_whatsapp.js"
 # once the code arrives (template_vars.seed_default_mappings; never overwrites).
 after_migrate = ["frappe_whatsapp.template_vars.after_migrate"]
 
+# whatsapp_document_send_guard: business apps that own document sends register
+# callables(reference_doctype, reference_name, template, attach, whatsapp_account)
+# that raise to refuse the legacy `send_template` entry point before it saves.
+
 # Uninstallation
 # ------------
 

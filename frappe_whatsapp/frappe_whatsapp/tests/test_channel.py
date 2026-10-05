@@ -28,7 +28,8 @@ class TestResolveMode(unittest.TestCase):
 		self.assertEqual(self.resolve("Off", True), "off")
 
 	def test_api_needs_an_active_default_account(self):
-		with patch.object(channel, "_setting", return_value=None):
+		with patch.object(channel, "_setting", return_value=None), \
+			patch("frappe_whatsapp.utils.outgoing_default", return_value=None):
 			self.assertFalse(channel.api_ready())
 		with patch.object(channel, "_setting", return_value="Cuenta"), \
 			patch.object(channel.frappe.db, "get_value", return_value="Inactive"):

@@ -262,7 +262,7 @@ def _build():
     frappe.__path__ = []  # a package, so `import frappe.utils` resolves through sys.modules
     for name in (
         "cache", "clear_document_cache", "delete_doc", "enqueue_doc", "get_all", "get_cached_doc", "get_doc",
-        "get_installed_apps", "get_meta", "get_roles", "get_single", "get_site_path", "get_traceback", "has_permission",
+        "get_attr", "get_hooks", "get_installed_apps", "get_meta", "get_roles", "get_single", "get_site_path", "get_traceback", "has_permission",
         "log_error", "new_doc", "only_for", "publish_realtime", "safe_eval", "set_user",
     ):
         setattr(frappe, name, _tripwire(name))

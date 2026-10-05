@@ -5,7 +5,8 @@ composer) asks `resolve_mode()` instead of keeping its own switch, so a worker
 never sees an API send in one screen and a wa.me link for the same customer in
 another.
 
-- ``api``: the default outgoing WhatsApp Account is Active; the server sends.
+- ``api``: the default outgoing WhatsApp Account (WhatsApp Settings, see
+  ``utils.outgoing_default``) is Active; the server sends.
 - ``manual``: the worker opens WhatsApp on their own device with the message
   prefilled (https://wa.me/<digits>?text=...). Nothing is sent by the server
   and nothing is confirmed as delivered.
@@ -36,8 +37,15 @@ def _setting(fieldname: str):
 
 
 def api_ready() -> bool:
-	"""A real, Active default outgoing account — not merely the app installed."""
+	"""A real, Active default outgoing account — not merely the app installed.
+
+	Same resolution as every send (`utils.outgoing_default`): the Settings choice,
+	else one unambiguous flagged account."""
 	account = _setting("default_outgoing_account")
+	if not account:
+		from frappe_whatsapp.utils import outgoing_default
+
+		account = outgoing_default()
 	if not account:
 		return False
 	return frappe.db.get_value("WhatsApp Account", account, "status") == "Active"

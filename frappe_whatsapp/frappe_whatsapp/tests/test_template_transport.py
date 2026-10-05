@@ -29,6 +29,7 @@ class TestTemplateTransport(unittest.TestCase):
         self.enterContext(patch.object(frappe.utils, "get_url", return_value="https://shop.example.test"))
         self.files = self.enterContext(patch.object(frappe.db, "get_value", return_value=None))
         self.enterContext(patch.object(frappe, "get_installed_apps", return_value=[]))
+        self.enterContext(patch.object(frappe, "get_hooks", return_value=[]))
         self.enterContext(patch.object(frappe, "flags", frappe._dict()))
         self.api = self.enterContext(patch.object(transport, "api", return_value={"messages": [{"id": "wamid.document-send"}]}))
         self.raw = self.enterContext(patch.object(transport, "raw"))

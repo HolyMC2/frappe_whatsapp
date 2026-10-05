@@ -42,6 +42,7 @@ class BridgeCase(unittest.TestCase):
         self.rollback = self.enterContext(patch.object(frappe.db, "rollback"))
         self.api = self.enterContext(patch.object(transport, "api", side_effect=AssertionError("no Meta request")))
         self.enterContext(patch.object(coexistence, "assert_sendable"))
+        self.enterContext(patch.object(frappe, "get_hooks", return_value=[]))
         self.payload = {"messaging_product": "whatsapp", "to": PEER, "type": "text",
                         "text": {"preview_url": True, "body": "Tu equipo está listo"}}
 

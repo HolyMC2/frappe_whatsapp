@@ -99,3 +99,29 @@ checkout. Ruff was unavailable in the system and reused tooling interpreter.
 No Frappe migration, disposable-site suite, real Meta request, lab or production
 operation was performed. The PM must migrate the new schema on a disposable site
 and verify the document template with its approved account before release.
+
+## Window evidence, private session documents and the outgoing default (wa-documentos-20261004)
+
+- `frappe_whatsapp.window` is the one customer-service-window predicate.
+  `evidence(phone_id, app_id, peer, lock=...)` reads only Processed `Meta Webhook
+  Receipt` rows for that business number and app, with the provider timestamp in
+  `(now - 24 h, now]`: future, malformed, unprocessed and exactly-24-hour-old
+  evidence never counts. `is_open(account, number)` is the plain-read preview
+  (`open`, exact `peer`, `closes_at`, `reason`). CRM's dispatcher uses the locked
+  form. `peer_candidates()` accepts only Mexico's 52/521 mobile alias; every other
+  number is matched exactly.
+- Session (`content_type=document`) sends of a site-private file require a
+  successful media upload; a failure refuses the send with a Spanish retry
+  reason instead of falling back to a link. The display name comes from
+  `attach_filename`, then the File row, then the URL basename.
+- `utils.outgoing_default()` makes WhatsApp Settings the outgoing authority: an
+  existing Settings choice wins even when inactive (no silent reroute); with no
+  choice exactly one Active `is_default_outgoing` account is adopted, otherwise
+  None (setup). Saving Settings moves the flag; flagging an account updates
+  Settings. Incoming defaults are unchanged.
+- Legacy `send_template` returns `{name, status}`; an `attach` must be a File
+  attached to the reference that the caller can read, and every
+  `whatsapp_document_send_guard` hook (business apps' sender policy) runs before
+  the row is saved. The generic form-menu dialog is Spanish and writes its
+  timeline comment only after the server accepted the send, saying whether it
+  is queued or sent.

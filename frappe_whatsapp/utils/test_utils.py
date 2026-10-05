@@ -63,6 +63,8 @@ class TestGetWhatsAppAccount(IntegrationTestCase):
             "is_default_outgoing": 1,
             "is_default_incoming": 1,
         })
+        # WhatsApp Settings is the outgoing-default authority (utils.outgoing_default).
+        frappe.db.set_single_value("WhatsApp Settings", "default_outgoing_account", "Test Utils Account")
 
     def test_get_account_by_phone_id(self):
         """Test getting account by phone_id."""

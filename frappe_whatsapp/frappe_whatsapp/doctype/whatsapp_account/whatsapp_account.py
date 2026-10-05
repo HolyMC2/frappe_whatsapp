@@ -31,6 +31,13 @@ class WhatsAppAccount(Document):
 
 				frappe.db.set_value("WhatsApp Account", whatsapp_account.name, field, 0)
 
+		# WhatsApp Settings is the outgoing authority: a newly flagged account
+		# becomes its choice, so the flag and the setting never disagree.
+		if self.get("is_default_outgoing") and frappe.db.get_single_value(
+			"WhatsApp Settings", "default_outgoing_account"
+		) != self.name:
+			frappe.db.set_single_value("WhatsApp Settings", "default_outgoing_account", self.name)
+
 	@frappe.whitelist()
 	def subscribe_app(self):
 		"""Subscribe this app to webhooks for the WhatsApp Business Account.

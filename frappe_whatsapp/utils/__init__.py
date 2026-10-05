@@ -173,6 +173,26 @@ def trigger_whatsapp_notifications(event):
             wa.name,
         ).send_scheduled_message()
 
+def outgoing_default():
+    """The default outgoing account's name: WhatsApp Settings is the authority.
+
+    An existing Settings choice wins, even when that account is inactive: its
+    sends then fail with a reason instead of moving to another number. With no
+    Settings choice, exactly one Active account flagged `is_default_outgoing`
+    is adopted; none or several is a setup problem (None), never a guess.
+    """
+    try:
+        chosen = frappe.db.get_single_value("WhatsApp Settings", "default_outgoing_account")
+    except Exception:
+        chosen = None
+    if chosen and frappe.db.exists("WhatsApp Account", chosen):
+        return chosen
+    flagged = frappe.get_all(
+        "WhatsApp Account", filters={"is_default_outgoing": 1, "status": "Active"}, pluck="name", limit=2
+    )
+    return flagged[0] if len(flagged) == 1 else None
+
+
 def get_whatsapp_account(phone_id=None, account_type='incoming'):
     """map whatsapp account with message"""
     if phone_id:
@@ -187,7 +207,11 @@ def get_whatsapp_account(phone_id=None, account_type='incoming'):
         # (outgoing / template paths).
         return None
 
-    account_field_type = 'is_default_incoming' if account_type =='incoming' else 'is_default_outgoing'
+    if account_type != 'incoming':
+        name = outgoing_default()
+        return frappe.get_doc("WhatsApp Account", name) if name else None
+
+    account_field_type = 'is_default_incoming'
     default_account_name = frappe.db.get_value('WhatsApp Account', {account_field_type: 1}, 'name')
     if default_account_name:
         return frappe.get_doc("WhatsApp Account", default_account_name)

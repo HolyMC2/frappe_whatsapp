@@ -2,85 +2,78 @@ $(document).on('app_ready', function () {
 	// waiting for page to load completely
 	frappe.router.on("change", () => {
 		var route = frappe.get_route();
-		// all form's menu add the 'Send To Telegram' funcationality
+		// every form's menu offers a template send (documents use their owning app's sheet)
 		if (route && route[0] == "Form") {
 			frappe.ui.form.on(route[1], {
 				refresh: function (frm) {
+					// Label kept: doco's erp_experience.js finds this item by __("Send To Whatsapp").
 					frm.page.add_menu_item(__("Send To Whatsapp"), function () {
-						var user_name = frappe.user.name;
-						var user_full_name = frappe.session.user_fullname;
-						var reference_doctype = frm.doctype;
-						var reference_name = frm.docname;
 						var dialog = new frappe.ui.Dialog({
 							'fields': [
 								{ 'fieldname': 'ht', 'fieldtype': 'HTML' },
-								{ 'label': 'Select Template', 'fieldname': 'template', 'reqd': 1, 'fieldtype': 'Link', 'options': 'WhatsApp Templates' },
-								{ 'label': 'Send to', 'fieldname': 'contact', 'reqd': 1, 'fieldtype': 'Link', 'options': 'Contact', change() {
-					                let contact_name = dialog.get_value('contact');
-					                console.log("heheheh", contact_name)
-					                if (contact_name) {
-					                    frappe.call({
-					                        method: 'frappe.client.get_value',
-					                        args: {
-					                            doctype: 'Contact',
-					                            filters: { name: contact_name },
-					                            fieldname: ['mobile_no']
-					                        },
-					                        callback: function (r) {
-					                        	console.log(r)
-					                            if (r.message) {
-					                                dialog.set_value('mobile_no', r.message.mobile_no);
-					                            } else {
-					                                dialog.set_value('mobile_no', '');
-					                                frappe.msgprint('Mobile number not found for the selected contact.');
-					                            }
-					                        }
-					                    });
-					                } else {
-					                    d.set_value('mobile_no', '');
-					                }
-					            }},
-								{ 'label': 'Mobile no', 'fieldname': 'mobile_no', 'fieldtype': 'Data' },
-
-							],
-							'primary_action_label': 'Send',
-							'title': 'Send a Telegram Message',
-							primary_action: function () {
-								var values = dialog.get_values();
-								if (values) {
-									var space = "\n" + "\n";
-									// var the_message = "From : " + user_full_name + space + values.subject + space + values.message;
-
-									// send telegram msg
+								{ 'label': __('Plantilla'), 'fieldname': 'template', 'reqd': 1, 'fieldtype': 'Link', 'options': 'WhatsApp Templates' },
+								{ 'label': __('Contacto'), 'fieldname': 'contact', 'reqd': 1, 'fieldtype': 'Link', 'options': 'Contact', change() {
+									let contact_name = dialog.get_value('contact');
+									if (!contact_name) {
+										dialog.set_value('mobile_no', '');
+										return;
+									}
 									frappe.call({
-										method: "frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_message.whatsapp_message.send_template",
+										method: 'frappe.client.get_value',
 										args: {
-											to: values.mobile_no,
-											template: values.template,
-											reference_doctype: frm.doc.doctype,
-											reference_name: frm.doc.name
+											doctype: 'Contact',
+											filters: { name: contact_name },
+											fieldname: ['mobile_no']
 										},
-										freeze: true,
-										callback: (r) => {
-											frappe.msgprint(__("Successfully Sent to: " + values.mobile_no));
-											dialog.hide();
+										callback: function (r) {
+											if (r.message && r.message.mobile_no) {
+												dialog.set_value('mobile_no', r.message.mobile_no);
+											} else {
+												dialog.set_value('mobile_no', '');
+												frappe.msgprint(__('Este contacto no tiene celular. Agrégalo en el contacto o escribe el número.'));
+											}
 										}
 									});
-
-									// add comment
-									var comment_message = 'To : ' + values.mobile_no + space + "Whatsapp Template:" + values.template;
-									frappe.call({
-										method: "frappe.desk.form.utils.add_comment",
-										args: {
-											reference_doctype: reference_doctype,
-											reference_name: reference_name,
-											content: comment_message,
-											comment_by: frappe.session.user_fullname,
-											comment_email: frappe.session.user
-										},
-									});
+								}},
+								{ 'label': __('Celular'), 'fieldname': 'mobile_no', 'fieldtype': 'Data' },
+							],
+							'primary_action_label': __('Enviar'),
+							'title': __('Enviar plantilla de WhatsApp'),
+							primary_action: function () {
+								var values = dialog.get_values();
+								if (!values) {
+									return;
 								}
-
+								// The comment is written only after the server accepted the
+								// send, and it says what actually happened (queued or sent).
+								frappe.call({
+									method: "frappe_whatsapp.frappe_whatsapp.doctype.whatsapp_message.whatsapp_message.send_template",
+									args: {
+										to: values.mobile_no,
+										template: values.template,
+										reference_doctype: frm.doc.doctype,
+										reference_name: frm.doc.name
+									},
+									freeze: true,
+									callback: (r) => {
+										var queued = r.message && r.message.status === "Queued";
+										var text = queued
+											? __("En cola para {0}. El estado se actualiza en la conversación.", [values.mobile_no])
+											: __("Enviado a {0}.", [values.mobile_no]);
+										frappe.show_alert({ message: text, indicator: queued ? "blue" : "green" });
+										frappe.call({
+											method: "frappe.desk.form.utils.add_comment",
+											args: {
+												reference_doctype: frm.doc.doctype,
+												reference_name: frm.doc.name,
+												content: __("WhatsApp ({0}) a {1}: plantilla {2}", [queued ? __("en cola") : __("enviado"), values.mobile_no, values.template]),
+												comment_email: frappe.session.user,
+												comment_by: frappe.session.user_fullname
+											},
+										});
+										dialog.hide();
+									}
+								});
 							},
 							no_submit_on_enter: true,
 						});
