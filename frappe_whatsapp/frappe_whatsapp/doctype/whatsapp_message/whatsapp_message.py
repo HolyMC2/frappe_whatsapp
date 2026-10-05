@@ -6,6 +6,7 @@ from frappe import _, throw
 from frappe.model.document import Document
 
 from frappe_whatsapp import template_vars, transport
+from frappe_whatsapp.template_transport import document_source, quick_reply_payloads
 from frappe_whatsapp.utils import get_whatsapp_account, format_number
 
 class WhatsAppMessage(Document):
@@ -334,7 +335,33 @@ class WhatsAppMessage(Document):
             "parameters": parameters,
         })
 
-        if template.header_type:
+        # Validate payload overrides before uploading anything or handing it to CRM.
+        has_mpm = False
+        catalog_data = None
+        if self.product_catalog_json:
+            try:
+                catalog_data = json.loads(self.product_catalog_json)
+                has_mpm = True
+            except Exception as e:
+                frappe.log_error(f"Failed to parse Product Catalog JSON: {str(e)}", "WhatsApp MPM Error")
+        payloads = quick_reply_payloads(self.get("buttons"), template.buttons or [], offset=int(has_mpm))
+
+        if template.header_type == 'DOCUMENT':
+            source = document_source(self.attach, self.get("attach_filename"), self.MAX_DOCUMENT_BYTES)
+            media_id = None
+            if source.local_attach:
+                media_id, _sent_as = self._upload_local_media(
+                    send_as="document", attach=source.local_attach, mime_type="application/pdf"
+                )
+            if not media_id and source.private:
+                frappe.throw(_("No se pudo cargar el PDF privado a WhatsApp. Vuelve a intentar Enviar; si continúa, adjunta de nuevo el PDF."))
+            document = {"id": media_id} if media_id else {"link": source.link}
+            document["filename"] = source.filename
+            data['template']['components'].append({
+                "type": "header",
+                "parameters": [{"type": "document", "document": document}],
+            })
+        elif template.header_type:
             if self.attach:
                 if self.attach.startswith("http"):
                     url = f'{self.attach}'
@@ -347,18 +374,6 @@ class WhatsAppMessage(Document):
                             "type": "image",
                             "image": {
                                 "link": url
-                            }
-                        }]
-                    })
-
-                elif template.header_type == 'DOCUMENT':
-                    data['template']['components'].append({
-                        "type": "header",
-                        "parameters": [{
-                            "type": "document",
-                            "document": {
-                                "link": url,
-                                "filename": "document.pdf"  # should be configurable
                             }
                         }]
                     })
@@ -380,24 +395,13 @@ class WhatsAppMessage(Document):
                     })
 
         # We check this before standard buttons because MPM is an interactive action
-        has_mpm = False
-        if self.product_catalog_json:
-            try:
-                catalog_data = json.loads(self.product_catalog_json)
-                data['template']['components'].append({
-                    "type": "button",
-                    "sub_type": "mpm",
-                    "index": "0",
-                    "parameters": [
-                        {
-                            "type": "action",
-                            "action": catalog_data
-                        }
-                    ]
-                })
-                has_mpm = True
-            except Exception as e:
-                frappe.log_error(f"Failed to parse Product Catalog JSON: {str(e)}", "WhatsApp MPM Error")
+        if has_mpm:
+            data['template']['components'].append({
+                "type": "button",
+                "sub_type": "mpm",
+                "index": "0",
+                "parameters": [{"type": "action", "action": catalog_data}],
+            })
 
         if template.buttons:
             # Only buttons with *runtime* parameters go into components.
@@ -415,7 +419,7 @@ class WhatsAppMessage(Document):
                         "type": "button",
                         "sub_type": "quick_reply",
                         "index": current_idx,
-                        "parameters": [{"type": "payload", "payload": btn.button_label}]
+                        "parameters": [{"type": "payload", "payload": payloads.get(current_idx, btn.button_label)}]
                     })
                 elif btn.button_type == "Visit Website" and btn.url_type == "Dynamic":
                     ref_doc = frappe.get_doc(self.reference_doctype, self.reference_name)
@@ -441,7 +445,7 @@ class WhatsAppMessage(Document):
     TRANSCODE_SOURCE_CAP = 100 * 1024 * 1024
     TRANSCODE_TIMEOUT_SECS = 90
 
-    def _upload_local_media(self):
+    def _upload_local_media(self, send_as=None, attach=None, mime_type=None):
         """Upload a SITE-HOSTED attachment to Meta's media endpoint.
 
         Returns (media_id, send_type). send_type may differ from
@@ -451,14 +455,18 @@ class WhatsAppMessage(Document):
         (None, content_type) for external URLs (B2 signed links keep the link
         send) and on any failure (caller falls back to the link send). Handles
         public /files, private /private/files, and absolute same-site URLs.
+        Optional overrides let a validated PDF template upload as document
+        without changing the transcript's content_type or attachment.
         """
         import mimetypes
         import os
 
         import requests
 
-        send_as = self.content_type
-        attach = self.attach or ""
+        send_as = send_as or self.content_type
+        original_send_as = send_as
+        attach = self.attach if attach is None else attach
+        attach = attach or ""
         if not attach:
             return None, send_as
         site_url = frappe.utils.get_url()
@@ -477,7 +485,7 @@ class WhatsAppMessage(Document):
         if not os.path.exists(path):
             return None, send_as
 
-        mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        mime = mime_type or mimetypes.guess_type(path)[0] or "application/octet-stream"
         cleanup = None
         try:
             send_as, path, mime, cleanup = self._fit_media_to_caps(send_as, path, mime)
@@ -505,7 +513,7 @@ class WhatsAppMessage(Document):
                 title="WhatsApp media upload failed — falling back to link send",
                 message=frappe.get_traceback(),
             )
-            return None, self.content_type
+            return None, original_send_as
         finally:
             if cleanup and os.path.exists(cleanup):
                 os.unlink(cleanup)
@@ -725,19 +733,23 @@ def on_doctype_update():
 
 
 @frappe.whitelist()
-def send_template(to, reference_doctype, reference_name, template):
-    try:
-        doc = frappe.get_doc({
-            "doctype": "WhatsApp Message",
-            "to": to,
-            "type": "Outgoing",
-            "message_type": "Template",
-            "reference_doctype": reference_doctype,
-            "reference_name": reference_name,
-            "content_type": "text",
-            "template": template
-        })
-
-        doc.save()
-    except Exception as e:
-        raise e
+def send_template(to, reference_doctype, reference_name, template, attach=None,
+                  attach_filename=None, buttons=None, whatsapp_account=None):
+    """Legacy form entry point; optional transport inputs also support document templates."""
+    reference = frappe.get_doc(reference_doctype, reference_name)
+    reference.check_permission("read")
+    doc = frappe.get_doc({
+        "doctype": "WhatsApp Message",
+        "to": to,
+        "type": "Outgoing",
+        "message_type": "Template",
+        "reference_doctype": reference_doctype,
+        "reference_name": reference_name,
+        "content_type": "text",
+        "template": template,
+        "attach": attach,
+        "attach_filename": attach_filename,
+        "buttons": buttons,
+        "whatsapp_account": whatsapp_account,
+    })
+    doc.save()

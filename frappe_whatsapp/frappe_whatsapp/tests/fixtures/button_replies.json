@@ -1,0 +1,44 @@
+{
+ "template_quick_reply": {
+  "field": "messages",
+  "value": {
+   "metadata": {"phone_number_id": "phone-a"},
+   "contacts": [{"wa_id": "15555550100", "profile": {"name": "Fictional Customer"}}],
+   "messages": [{
+    "id": "wamid.template-reply", "from": "15555550100", "type": "button",
+    "context": {"from": "15555550200", "id": "wamid.outbound-template"},
+    "button": {"text": "Acepto", "payload": "doc:opaque-token-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-abcdefghijklmnopqrstuvwxyz"}
+   }]
+  }
+ },
+ "interactive_button_reply": {
+  "field": "messages",
+  "value": {
+   "metadata": {"phone_number_id": "phone-a"},
+   "contacts": [{"wa_id": "15555550100", "profile": {"name": "Fictional Customer"}}],
+   "messages": [{
+    "id": "wamid.interactive-button", "from": "15555550100", "type": "interactive",
+    "context": {"id": "wamid.outbound-interactive"},
+    "interactive": {"type": "button_reply", "button_reply": {"id": "sn:opaque-staff-notice-token", "title": "Enterado"}}
+   }]
+  }
+ },
+ "interactive_list_reply": {
+  "field": "messages",
+  "value": {
+   "metadata": {"phone_number_id": "phone-a"},
+   "messages": [{
+    "id": "wamid.interactive-list", "from": "15555550100", "type": "interactive",
+    "context": {"id": "wamid.outbound-list"},
+    "interactive": {"type": "list_reply", "list_reply": {"id": "existing-list-id", "title": "Existing selection", "description": "Existing description"}}
+   }]
+  }
+ },
+ "plain_text": {
+  "field": "messages",
+  "value": {
+   "metadata": {"phone_number_id": "phone-a"},
+   "messages": [{"id": "wamid.plain-text", "from": "15555550100", "type": "text", "text": {"body": "Existing text"}}]
+  }
+ }
+}

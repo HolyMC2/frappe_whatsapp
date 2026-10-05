@@ -116,7 +116,33 @@ def consume_receipt(receipt):
 
 
 # Assistant/domain seam: a snapshot with media identity, never account credentials.
+def _button_payload(message):
+	"""Carry provider button tokens verbatim; token validation belongs to domain apps."""
+	if message.get("type") == "button":
+		return (message.get("button") or {}).get("payload")
+	if message.get("type") == "interactive":
+		interactive = message.get("interactive") or {}
+		if interactive.get("type") in {"button_reply", "list_reply"}:
+			return (interactive.get(interactive["type"]) or {}).get("id")
+	return None
+
+
+def _reply_context(message):
+	context = message.get("context") or {}
+	reply_to_message_id = (context.get("id") or None) if "forwarded" not in context else None
+	return bool(reply_to_message_id), reply_to_message_id
+
+
 def _incoming_extension(message, account, phone_id):
+	"""Pass an account-scoped snapshot to ``whatsapp_incoming_committed`` handlers.
+
+	``message`` retains the existing display text/interactive ID contract;
+	``button_payload`` carries the template payload or interactive reply ID verbatim.
+	``reply_to_message_id`` and ``is_reply`` identify the replied-to provider message.
+	Domain apps own prefix routing, signature/expiry/sender validation and replay
+	protection. Handlers persist local work in the receipt transaction: they must
+	not commit or send. A true result claims media retrieval, as before.
+	"""
 	from frappe_whatsapp.webhook_receipts import incoming_committed, incoming_is_live
 
 	media = message.get(message.get("type")) or {}
@@ -124,13 +150,19 @@ def _incoming_extension(message, account, phone_id):
 	button = interactive.get("button_reply") or interactive.get("list_reply") or {}
 	error = next((e for e in message.get("errors", []) if str(e.get("code")) == "131052"), None)
 	name = frappe.db.get_value("WhatsApp Message", {"message_id": message["id"], "whatsapp_account": account.name})
-	stored = frappe.db.get_value("WhatsApp Message", name, ["attach", "content_type", "message"], as_dict=True) if name else {}
+	stored = frappe.db.get_value("WhatsApp Message", name,
+		["attach", "content_type", "message", "button_payload", "reply_to_message_id", "is_reply"],
+		as_dict=True) if name else {}
 	stored = stored or {}
+	is_reply, reply_to_message_id = _reply_context(message)
 	return incoming_committed({
 		"type": "Incoming", "name": name, "from": message.get("from"),
 		"message_id": message["id"], "whatsapp_account": account.name, "phone_id": phone_id,
 		"content_type": stored.get("content_type") or ("button" if button else message.get("type")),
-		"message": stored.get("message") or button.get("id") or media.get("body") or media.get("caption") or "",
+		"message": stored.get("message") or button.get("id") or media.get("body") or media.get("caption") or media.get("text") or "",
+		"button_payload": stored.get("button_payload") if stored.get("button_payload") is not None else _button_payload(message),
+		"reply_to_message_id": stored.get("reply_to_message_id") or reply_to_message_id,
+		"is_reply": bool(stored.get("is_reply")) if stored.get("is_reply") is not None else is_reply,
 		"media_id": media.get("id"), "filename": media.get("filename"),
 		"attach": stored.get("attach"),
 		"error_code": error.get("code") if error else None,
@@ -154,8 +186,7 @@ def process_change(scoped):
 		for message in messages:
 			sender_profile_name = profiles.get(message.get('from'))
 			message_type = message['type']
-			is_reply = True if message.get('context') and 'forwarded' not in message.get('context') else False
-			reply_to_message_id = message['context']['id'] if is_reply else None
+			is_reply, reply_to_message_id = _reply_context(message)
 			if any(str(e.get("code")) == "131052" for e in message.get("errors", [])):
 				# Inbound oversized media has no downloadable media object.
 				frappe.get_doc({
@@ -200,6 +231,7 @@ def process_change(scoped):
 						"type": "Incoming",
 						"from": message['from'],
 						"message": interactive_data['button_reply']['id'],
+						"button_payload": _button_payload(message),
 						"message_id": message['id'],
 						"reply_to_message_id": reply_to_message_id,
 						"is_reply": is_reply,
@@ -214,6 +246,7 @@ def process_change(scoped):
 						"type": "Incoming",
 						"from": message['from'],
 						"message": interactive_data['list_reply']['id'],
+						"button_payload": _button_payload(message),
 						"message_id": message['id'],
 						"reply_to_message_id": reply_to_message_id,
 						"is_reply": is_reply,
@@ -361,6 +394,7 @@ def process_change(scoped):
 					"type": "Incoming",
 					"from": message['from'],
 					"message": message['button']['text'],
+					"button_payload": _button_payload(message),
 					"message_id": message['id'],
 					"reply_to_message_id": reply_to_message_id,
 					"is_reply": is_reply,

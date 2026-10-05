@@ -21,6 +21,7 @@
   "product_catalog_json",
   "column_break_5",
   "message",
+  "button_payload",
   "message_type",
   "message_id",
   "external_receipt",
@@ -29,6 +30,7 @@
   "conversation_id",
   "content_type",
   "attach",
+  "attach_filename",
   "buttons",
   "body_param",
   "whatsapp_account",
@@ -141,6 +143,14 @@
    "set_only_once": 1
   },
   {
+   "fieldname": "button_payload",
+   "fieldtype": "Long Text",
+   "label": "Datos del botón",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Valor recibido al responder un botón de plantilla o una opción interactiva."
+  },
+  {
    "allow_in_quick_entry": 1,
    "fieldname": "message_type",
    "fieldtype": "Select",
@@ -200,9 +210,16 @@
    "label": "Attach"
   },
   {
+   "depends_on": "eval:doc.attach",
+   "fieldname": "attach_filename",
+   "fieldtype": "Data",
+   "label": "Nombre del archivo",
+   "description": "Nombre opcional del archivo para el encabezado de documento de una plantilla, incluidos enlaces firmados sin nombre de archivo."
+  },
+  {
    "default": "{}",
-   "depends_on": "eval:doc.content_type=='interactive'",
-   "description": "JSON array: [{\"id\": \"yes\", \"title\": \"Yes\"}, {\"id\": \"no\", \"title\": \"No\"}]",
+   "depends_on": "eval:doc.content_type=='interactive' || doc.message_type=='Template' || doc.template",
+   "description": "Botones interactivos: [{\"id\": \"yes\", \"title\": \"Sí\"}]. Respuestas rápidas de plantilla: [{\"index\": 0, \"payload\": \"token-firmado-u-opaco\"}]. index es el índice final del botón en Meta, incluido el desplazamiento por tarjetas de productos.",
    "fieldname": "buttons",
    "fieldtype": "JSON",
    "label": "Buttons"
