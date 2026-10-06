@@ -25,7 +25,7 @@
   },
   {
    "default": "{}",
-   "description": "JSON formatted data for message variables",
+   "description": "Data for the message variables, e.g. {\"name\": \"Ana\"}.",
    "fieldname": "recipient_data",
    "fieldtype": "Code",
    "label": "Recipient Data",

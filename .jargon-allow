@@ -1,0 +1,11 @@
+# whole files: tests, drills, patches, operator-only tools
+# Demo console for administrators; its parameter errors are read by whoever drives the demo.
+frappe_whatsapp/demo.py
+# one field of one DocType file
+# Meta's own name for this setting; the administrator pastes it into Meta's webhook console.
+frappe_whatsapp/frappe_whatsapp/doctype/whatsapp_account/whatsapp_account.json::webhook_verify_token
+# Stored option values; translations/es.csv gives them shop words.
+frappe_whatsapp/frappe_whatsapp/doctype/whatsapp_notification/whatsapp_notification.json::notification_type
+# one message anywhere
+# Answer to Meta's servers on a bad webhook signature; no person sees it.
+msg::Invalid webhook signature or account scope.

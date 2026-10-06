@@ -133,7 +133,7 @@
   {
    "fieldname": "for_doctype",
    "fieldtype": "Link",
-   "label": "For DocType",
+   "label": "Document Type",
    "options": "DocType"
   },
   {

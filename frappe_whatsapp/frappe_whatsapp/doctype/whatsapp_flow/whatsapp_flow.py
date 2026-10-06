@@ -377,12 +377,12 @@ class WhatsAppFlow(Document):
                 error_details = error_data.get("error", {}).get("error_user_msg", "")
                 if error_details:
                     error_msg = f"{error_msg} - {error_details}"
-                frappe.throw(_("Failed to upload flow JSON: {0}").format(error_msg))
+                frappe.throw(_("Could not send the form design to WhatsApp: {0}").format(error_msg))
 
-            frappe.msgprint(_("Flow JSON uploaded successfully"))
+            frappe.msgprint(_("Form design sent to WhatsApp"))
 
         except requests.exceptions.RequestException as e:
-            frappe.throw(_("Failed to upload flow JSON: {0}").format(str(e)))
+            frappe.throw(_("Could not send the form design to WhatsApp: {0}").format(str(e)))
 
     @frappe.whitelist()
     def publish_flow(self):
@@ -574,7 +574,7 @@ class WhatsAppFlow(Document):
                 )
             else:
                 frappe.msgprint(
-                    _("Flow Status: {0}\nJSON Version: {1}").format(
+                    _("Status: {0}\nVersion: {1}").format(
                         data.get("status", "Unknown"),
                         data.get("json_version", "Unknown")
                     ),

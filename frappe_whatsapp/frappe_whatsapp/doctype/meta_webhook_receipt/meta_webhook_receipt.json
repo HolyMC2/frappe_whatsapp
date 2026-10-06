@@ -53,6 +53,7 @@
   },
   {
    "fieldname": "payload",
+   "hidden": 1,
    "fieldtype": "Long Text",
    "label": "Payload",
    "read_only": 1,
@@ -60,6 +61,7 @@
   },
   {
    "fieldname": "payload_hash",
+   "hidden": 1,
    "fieldtype": "Data",
    "label": "Payload Hash",
    "read_only": 1,

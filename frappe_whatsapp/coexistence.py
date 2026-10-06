@@ -137,7 +137,7 @@ def _persisted_external(doc):
 def reject_external_mutation(doc):
     """Ordinary document APIs cannot create, edit, strip or rename this origin."""
     if any(doc.get(field) not in (None, "") for field in _EXTERNAL_FIELDS) or _persisted_external(doc):
-        frappe.throw("External business-app messages are immutable projections.", frappe.ValidationError)
+        frappe.throw(frappe._("Messages sent from the WhatsApp Business app cannot be edited here."), frappe.ValidationError)
 
 
 def assert_sendable(doc):

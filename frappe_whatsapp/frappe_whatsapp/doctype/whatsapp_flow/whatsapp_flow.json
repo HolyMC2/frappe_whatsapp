@@ -59,7 +59,7 @@
    "read_only": 1
   },
   {
-   "description": "Flow ID from WhatsApp API (auto-generated after creation)",
+   "description": "Form ID in WhatsApp (assigned when it is created).",
    "fieldname": "flow_id",
    "fieldtype": "Data",
    "label": "Flow ID",
@@ -99,7 +99,7 @@
    "default": "6.0",
    "fieldname": "data_api_version",
    "fieldtype": "Select",
-   "label": "Flow JSON Version",
+   "label": "Form Version",
    "options": "7.3\n7.2\n7.1\n7.0\n6.3\n6.2\n6.1\n6.0\n5.1"
   },
   {
@@ -129,13 +129,13 @@
    "collapsible": 1,
    "fieldname": "section_break_json",
    "fieldtype": "Section Break",
-   "label": "Generated Flow JSON"
+   "label": "System Details"
   },
   {
    "description": "Auto-generated from screens configuration",
    "fieldname": "flow_json",
    "fieldtype": "Code",
-   "label": "Flow JSON",
+   "label": "Form Design (generated)",
    "options": "JSON",
    "read_only": 1
   },

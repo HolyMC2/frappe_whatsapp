@@ -2,7 +2,7 @@ frappe.ui.form.on('WhatsApp Recipient List', {
     refresh: function(frm) {
         frm.fields_dict.import_button.onclick = function() {
             if(!frm.doc.doctype_to_import || !frm.doc.mobile_field) {
-                frappe.throw(__('Please select a DocType and Mobile Field before importing'));
+                frappe.throw(__('Choose the document type and the mobile number field before importing'));
                 return;
             }
             
@@ -11,7 +11,7 @@ frappe.ui.form.on('WhatsApp Recipient List', {
                 try {
                     filters = JSON.parse(frm.doc.import_filters);
                 } catch(e) {
-                    frappe.throw(__('Invalid JSON in Filters field'));
+                    frappe.throw(__('The filters have a format error.'));
                     return;
                 }
             }
@@ -43,7 +43,7 @@ frappe.ui.form.on('WhatsApp Recipient List', {
                 fields: [
                     {label: __('Mobile Number'), fieldname: 'mobile_number', fieldtype: 'Data', reqd: 1},
                     {label: __('Recipient Name'), fieldname: 'recipient_name', fieldtype: 'Data'},
-                    {label: __('Recipient Data (JSON)'), fieldname: 'recipient_data', fieldtype: 'Code', options: 'JSON'}
+                    {label: __('Recipient Data'), fieldname: 'recipient_data', fieldtype: 'Code', options: 'JSON'}
                 ],
                 primary_action_label: __('Add'),
                 primary_action: function(values) {
@@ -57,7 +57,7 @@ frappe.ui.form.on('WhatsApp Recipient List', {
                         try {
                             JSON.parse(values.recipient_data);
                         } catch(e) {
-                            frappe.throw(__('Invalid JSON in Recipient Data field'));
+                            frappe.throw(__('The recipient data has a format error.'));
                             return;
                         }
                     }

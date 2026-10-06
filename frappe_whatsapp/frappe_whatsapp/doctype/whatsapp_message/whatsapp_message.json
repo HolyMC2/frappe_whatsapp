@@ -86,7 +86,7 @@
   },
   {
    "depends_on": "eval:doc.status=='failed'",
-   "description": "Meta's async failure detail from the status webhook (code \u00b7 title \u00b7 message).",
+   "description": "Why WhatsApp did not deliver the message.",
    "fieldname": "failure_reason",
    "fieldtype": "Small Text",
    "label": "Failure Reason",
@@ -144,6 +144,7 @@
   },
   {
    "fieldname": "button_payload",
+   "hidden": 1,
    "fieldtype": "Long Text",
    "label": "Datos del botón",
    "read_only": 1,
@@ -219,7 +220,7 @@
   {
    "default": "{}",
    "depends_on": "eval:doc.content_type=='interactive' || doc.message_type=='Template' || doc.template",
-   "description": "Botones interactivos: [{\"id\": \"yes\", \"title\": \"Sí\"}]. Respuestas rápidas de plantilla: [{\"index\": 0, \"payload\": \"token-firmado-u-opaco\"}]. index es el índice final del botón en Meta, incluido el desplazamiento por tarjetas de productos.",
+   "description": "Botones del mensaje, p. ej. [{\"id\": \"si\", \"title\": \"Sí\"}]. En respuestas rápidas de plantilla, cada botón lleva su posición y el texto que regresa.",
    "fieldname": "buttons",
    "fieldtype": "JSON",
    "label": "Buttons"
@@ -246,7 +247,7 @@
   {
    "fieldname": "reference_doctype",
    "fieldtype": "Link",
-   "label": "Reference DocType",
+   "label": "Document Type",
    "options": "DocType"
   },
   {

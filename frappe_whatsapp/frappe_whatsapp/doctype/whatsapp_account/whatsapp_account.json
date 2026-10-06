@@ -99,7 +99,7 @@
    "default": "Live",
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "description": "Live sends to Meta. Demo suppresses every Graph API call and returns a synthetic Meta-shaped response, so the full flow can be exercised \u2014 and demonstrated \u2014 without contacting Meta, spending money, or touching a real phone number. Per account on purpose: a tenant can demo to a prospect while still serving real customers on another account."
+   "description": "Live: sends for real. Demo: simulates sends without contacting WhatsApp or spending money, so you can show the flow to a prospect while other accounts keep serving real customers."
   },
   {
    "default": "0",

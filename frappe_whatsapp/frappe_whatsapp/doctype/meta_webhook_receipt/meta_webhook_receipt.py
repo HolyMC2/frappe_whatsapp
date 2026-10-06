@@ -6,4 +6,4 @@ from frappe.model.document import Document
 class MetaWebhookReceipt(Document):
     def validate(self):
         if not self.is_new():
-            frappe.throw("Webhook receipts are immutable outside their worker lifecycle.")
+            frappe.throw(frappe._("This WhatsApp notice cannot be edited."))

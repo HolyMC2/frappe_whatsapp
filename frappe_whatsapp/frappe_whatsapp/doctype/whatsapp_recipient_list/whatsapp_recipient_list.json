@@ -54,13 +54,13 @@
    "default": "0",
    "fieldname": "import_from_doctype",
    "fieldtype": "Check",
-   "label": "Import From DocType"
+   "label": "Import From Document Type"
   },
   {
    "depends_on": "eval:doc.import_from_doctype==1",
    "fieldname": "doctype_to_import",
    "fieldtype": "Link",
-   "label": "DocType to Import",
+   "label": "Document Type to Import",
    "options": "DocType"
   },
   {
@@ -79,7 +79,7 @@
   },
   {
    "depends_on": "eval:doc.import_from_doctype==1",
-   "description": "JSON filters to apply when importing (optional) Ex: {\"email\": \"admin@example.com\"}",
+   "description": "Filters to apply when importing (optional), e.g. {\"email\": \"admin@example.com\"}",
    "fieldname": "import_filters",
    "fieldtype": "Code",
    "label": "Filters",
@@ -101,7 +101,7 @@
   },
   {
    "depends_on": "eval:doc.import_from_doctype==1",
-   "description": "JSON fields to apply when importing (optional) [\"full_name\", \"email\"]",
+   "description": "Fields to import (optional), e.g. [\"email\"]",
    "fieldname": "data_fields",
    "fieldtype": "Code",
    "label": "Data fields",

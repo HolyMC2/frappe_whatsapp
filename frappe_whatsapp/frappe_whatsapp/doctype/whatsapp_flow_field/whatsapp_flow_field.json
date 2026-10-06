@@ -115,7 +115,7 @@
    "label": "Options"
   },
   {
-   "description": "JSON array of options: [{\"id\": \"opt1\", \"title\": \"Option 1\"}, ...]",
+   "description": "Options the customer can pick, as a list: [{\"id\": \"opt1\", \"title\": \"Option 1\"}, ...]",
    "fieldname": "options",
    "fieldtype": "Code",
    "label": "Options",

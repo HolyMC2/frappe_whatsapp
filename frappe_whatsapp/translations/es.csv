@@ -1,0 +1,33 @@
+This WhatsApp notice cannot be edited.,Este aviso de WhatsApp no se puede editar.
+Messages sent from the WhatsApp Business app cannot be edited here.,Los mensajes enviados desde la app de WhatsApp Business no se pueden editar aquí.
+Form ID in WhatsApp (assigned when it is created).,ID del formulario en WhatsApp (se asigna al crearlo).
+Form Version,Versión del formulario
+System Details,Detalles del sistema
+Form Design (generated),Diseño del formulario (generado)
+Send Form Design,Enviar diseño del formulario
+Sending form design...,Enviando diseño del formulario...
+Could not send the form design to WhatsApp: {0},No se pudo enviar el diseño del formulario a WhatsApp: {0}
+Form design sent to WhatsApp,Diseño del formulario enviado a WhatsApp
+"Status: {0}
+Version: {1}","Estado: {0}
+Versión: {1}"
+Deprecated,Retirado
+Throttled,Limitado
+"Options the customer can pick, as a list: [{""id"": ""opt1"", ""title"": ""Option 1""}, ...]","Opciones que el cliente puede elegir, como lista: [{""id"": ""opt1"", ""title"": ""Opción 1""}, ...]"
+Why WhatsApp did not deliver the message.,Motivo por el que WhatsApp no entregó el mensaje.
+Document Type,Tipo de documento
+Document Event,Evento del documento
+DocType Event,Evento del documento
+Scheduler Event,Programado
+"Live: sends for real. Demo: simulates sends without contacting WhatsApp or spending money, so you can show the flow to a prospect while other accounts keep serving real customers.","En vivo: envía de verdad. Demostración: simula los envíos sin contactar a WhatsApp ni gastar, para mostrarle el flujo a un prospecto mientras otras cuentas atienden a clientes reales."
+Attach the file from this field of the document.,Adjuntar el archivo de este campo del documento.
+Field {0} not found on document type {1},El campo {0} no existe en el tipo de documento {1}
+"Data for the message variables, e.g. {""name"": ""Ana""}.","Datos para las variables del mensaje, p. ej. {""name"": ""Ana""}."
+Import From Document Type,Importar desde tipo de documento
+Document Type to Import,Tipo de documento a importar
+"Filters to apply when importing (optional), e.g. {""email"": ""admin@example.com""}","Filtros al importar (opcional), p. ej. {""email"": ""admin@example.com""}"
+"Fields to import (optional), e.g. [""email""]","Campos a importar (opcional), p. ej. [""email""]"
+Choose the document type and the mobile number field before importing,Elige el tipo de documento y el campo de celular antes de importar.
+The filters have a format error.,Los filtros tienen un error de formato.
+Recipient Data,Datos de destinatarios
+The recipient data has a format error.,Los datos de destinatarios tienen un error de formato.

@@ -37,7 +37,7 @@ class WhatsAppNotification(Document):
         if self.set_property_after_alert:
             meta = frappe.get_meta(self.reference_doctype)
             if not meta.get_field(self.set_property_after_alert):
-                frappe.throw(_("Field {0} not found on DocType {1}").format(
+                frappe.throw(_("Field {0} not found on document type {1}").format(
                     self.set_property_after_alert,
                     self.reference_doctype,
                 ))
