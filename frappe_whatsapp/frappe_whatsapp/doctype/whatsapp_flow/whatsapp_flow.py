@@ -2,12 +2,23 @@
 # For license information, please see license.txt
 
 import json
+import re
 
 import frappe
 import requests
 from frappe import _
 from frappe.model.document import Document
 from frappe_whatsapp import transport
+
+
+# A choice field whose options are `${data.<key>}` lists what the sender passes in the
+# send's flow_action_payload.data (for example today's free times) instead of a fixed list.
+_BOUND_OPTIONS = re.compile(r"^\$\{data\.([A-Za-z_][A-Za-z0-9_]{0,79})\}$")
+
+
+def bound_options(options):
+    match = _BOUND_OPTIONS.match((options or "").strip())
+    return match.group(1) if match else None
 
 
 class WhatsAppFlow(Document):
@@ -96,10 +107,23 @@ class WhatsAppFlow(Document):
 
     def build_screen(self, screen, incoming_data=None):
         """Build a single screen definition."""
+        data = dict(incoming_data or {})
+        # Choices the sender passes when it sends the flow (flow_action_payload.data).
+        for field in self.fields:
+            key = bound_options(field.options) if field.screen == screen.screen_id and field.enabled else None
+            if key:
+                data[key] = {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {"id": {"type": "string"}, "title": {"type": "string"}},
+                    },
+                    "__example__": [{"id": "example", "title": "Example"}],
+                }
         screen_data = {
             "id": screen.screen_id,
             "title": screen.screen_title,
-            "data": incoming_data or {},
+            "data": data,
             "layout": {
                 "type": "SingleColumnLayout",
                 "children": []
@@ -216,7 +240,8 @@ class WhatsAppFlow(Document):
 
         # Options for dropdown/radio/checkbox
         if field_type in ["Dropdown", "RadioButtonsGroup", "CheckboxGroup"]:
-            options = self.parse_options(field.options)
+            key = bound_options(field.options)
+            options = "${data.%s}" % key if key else self.parse_options(field.options)
             if options:
                 component["data-source"] = options
 

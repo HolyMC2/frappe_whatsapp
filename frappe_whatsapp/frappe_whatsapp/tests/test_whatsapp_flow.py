@@ -215,6 +215,26 @@ class TestWhatsAppFlow(FrappeTestCase):
         self.assertEqual(len(dropdown["data-source"]), 3)
         self.assertEqual(dropdown["data-source"][0]["id"], "us")
 
+    def test_dropdown_bound_to_send_data(self):
+        """Options written as ${data.key} come from the send's payload, declared on the screen."""
+        screens = [{"screen_id": "pick", "screen_title": "Pick", "terminal": 1}]
+        fields = [{
+            "screen": "pick",
+            "field_name": "slot",
+            "field_type": "Dropdown",
+            "label": "Time",
+            "enabled": 1,
+            "options": "${data.slots}",
+        }]
+
+        flow = self.create_test_flow("Test Bound Dropdown", screens, fields)
+        flow_json = json.loads(flow.flow_json)
+        screen = flow_json["screens"][0]
+
+        self.assertEqual(screen["layout"]["children"][0]["data-source"], "${data.slots}")
+        self.assertEqual(screen["data"]["slots"]["type"], "array")
+        self.assertIn("__example__", screen["data"]["slots"])
+
     def test_text_input_validation(self):
         """Test text input with min/max chars."""
         screens = [{"screen_id": "form", "screen_title": "Form", "terminal": 1}]
