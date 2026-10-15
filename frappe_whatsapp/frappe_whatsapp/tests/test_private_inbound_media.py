@@ -87,7 +87,8 @@ class TestPrivateInboundMediaMigration(IntegrationTestCase):
 			migration.apply(confirm="yes")
 
 	def test_apply_moves_bytes_and_rewrites_every_live_referrer(self):
-		msg, file = _whatsapp_file(b"fictional factura " + uuid4().hex.encode())
+		content = b"fictional factura " + uuid4().hex.encode()
+		msg, file = _whatsapp_file(content)
 		self.track(file)
 		old_url = file.file_url
 		comment = frappe.get_doc(
@@ -108,7 +109,7 @@ class TestPrivateInboundMediaMigration(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("WhatsApp Message", msg, "attach"), new_url)
 		self.assertIn(new_url, frappe.db.get_value("Comment", comment.name, "content"))
 		self.assertNotIn(f'"{old_url}"', frappe.db.get_value("Comment", comment.name, "content"))
-		self.assertEqual(frappe.get_doc("File", file.name).get_content(), file.get_content())
+		self.assertEqual(frappe.get_doc("File", file.name).get_content(encodings=[]), content)
 
 	def test_shared_bytes_get_a_private_copy_and_the_other_row_stays_public(self):
 		content = b"fictional shared photo " + uuid4().hex.encode()
