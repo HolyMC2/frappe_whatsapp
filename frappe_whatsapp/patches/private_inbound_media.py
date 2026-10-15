@@ -285,9 +285,9 @@ def apply(confirm: str | None = None, limit: int | None = None) -> dict:
 	"""Move public WhatsApp media to private. Requires confirm="D5" (Marco's decision)."""
 	if confirm != CONFIRM:
 		frappe.throw(
-			"La migración de archivos de WhatsApp a privados espera la decisión D5. "
-			"Revisa primero el informe: frappe_whatsapp.patches.private_inbound_media.report",
-			title="Falta la decisión D5",
+			"Pasar a privados los archivos de WhatsApp anteriores espera la aprobación de Marco. "
+			"Revisa primero el informe de prueba.",
+			title="Falta la aprobación",
 		)
 	plan = _plan()
 	done = {"move": 0, "copy": 0, "missing": 0, "referrers_rewritten": 0}
