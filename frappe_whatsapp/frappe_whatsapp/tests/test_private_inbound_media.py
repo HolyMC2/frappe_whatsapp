@@ -95,7 +95,8 @@ class TestPrivateInboundMediaMigration(IntegrationTestCase):
 			 "reference_name": msg, "content": f'<a href="{old_url}">factura</a>'}
 		).insert(ignore_permissions=True)
 
-		self.assertEqual(migration.report()["referrers_by_field"].get("Comment.content"), 1)
+		# Frappe also adds an "Attachment" comment carrying the URL: a live referrer too.
+		self.assertGreaterEqual(migration.report()["referrers_by_field"].get("Comment.content"), 1)
 		result = migration.apply(confirm="D5")
 
 		self.assertEqual(result["move"], 1)

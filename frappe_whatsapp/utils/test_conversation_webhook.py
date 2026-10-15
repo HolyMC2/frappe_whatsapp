@@ -331,14 +331,20 @@ class TestWebhookMedia(IntegrationTestCase):
 	def test_inbound_media_is_private(self):
 		"""Customer media is never reachable by a public /files/ URL (ARC-S2.1)."""
 		meta_resp = MagicMock()
+		meta_resp.status_code = 200
 		meta_resp.raise_for_status.return_value = None
 		meta_resp.json.return_value = {
 			"url": "https://cdn.example/media/conv_media_1",
-			"mime_type": "application/pdf",
+			"mime_type": "image/png",
 		}
 		bin_resp = MagicMock()
 		bin_resp.raise_for_status.return_value = None
-		bin_resp.content = b"%PDF-1.4\n% fictional customer document\n%%EOF\n"
+		# A real 1x1 PNG: Frappe validates image bytes on save.
+		bin_resp.content = (
+			b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01"
+			b"\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\rIDATx\x9cc\xf8\xff"
+			b"\xff?\x00\x05\xfe\x02\xfe\xa75\x81\x84\x00\x00\x00\x00IEND\xaeB`\x82"
+		)
 		with patch(
 			"frappe_whatsapp.utils.webhook.transport.raw", side_effect=[meta_resp, bin_resp]
 		):
