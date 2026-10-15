@@ -361,6 +361,8 @@ def process_change(scoped):
 					file_data = media_response.content
 					file_name = f"{frappe.generate_hash(length=10)}.{file_extension}"
 
+					# Customer media (IDs, invoices, photos) is private: served only
+					# to signed-in users who can read the message, never by public URL.
 					file = frappe.get_doc(
 						{
 							"doctype": "File",
@@ -368,7 +370,8 @@ def process_change(scoped):
 							"attached_to_doctype": "WhatsApp Message",
 							"attached_to_name": message_doc.name,
 							"content": file_data,
-							"attached_to_field": "attach"
+							"attached_to_field": "attach",
+							"is_private": 1,
 						}
 					).save(ignore_permissions=True)
 

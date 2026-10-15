@@ -328,6 +328,30 @@ class TestWebhookMedia(IntegrationTestCase):
 			)
 		)
 
+	def test_inbound_media_is_private(self):
+		"""Customer media is never reachable by a public /files/ URL (ARC-S2.1)."""
+		meta_resp = MagicMock()
+		meta_resp.raise_for_status.return_value = None
+		meta_resp.json.return_value = {
+			"url": "https://cdn.example/media/conv_media_1",
+			"mime_type": "application/pdf",
+		}
+		bin_resp = MagicMock()
+		bin_resp.raise_for_status.return_value = None
+		bin_resp.content = b"%PDF-1.4\n% fictional customer document\n%%EOF\n"
+		with patch(
+			"frappe_whatsapp.utils.webhook.transport.raw", side_effect=[meta_resp, bin_resp]
+		):
+			self._post(_image_payload(_PID_A, "5215551234523", "wamid.conv_media_private"))
+
+		msg = frappe.get_doc("WhatsApp Message", {"message_id": "wamid.conv_media_private"})
+		self.assertTrue(msg.attach.startswith("/private/files/"), msg.attach)
+		file = frappe.get_doc(
+			"File", {"attached_to_doctype": "WhatsApp Message", "attached_to_name": msg.name}
+		)
+		self.assertEqual(file.is_private, 1)
+		self.assertEqual(file.file_url, msg.attach)
+
 
 class TestAccountDefaultsExclusive(IntegrationTestCase):
 	"""WhatsApp Account.there_must_be_only_one_default — inbound routing relies on a
