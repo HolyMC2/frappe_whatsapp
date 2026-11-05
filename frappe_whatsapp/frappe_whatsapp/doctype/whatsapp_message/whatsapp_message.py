@@ -10,6 +10,14 @@ from frappe_whatsapp.template_transport import document_source, quick_reply_payl
 from frappe_whatsapp.utils import get_whatsapp_account, format_number
 
 class WhatsAppMessage(Document):
+    def onload(self):
+        # The form decides read receipts from this; reading WhatsApp Account
+        # from the browser is refused for most staff, a dialog on every open.
+        auto = bool(self.whatsapp_account) and frappe.db.get_value(
+            "WhatsApp Account", self.whatsapp_account, "allow_auto_read_receipt"
+        )
+        self.set_onload("auto_read_receipt", 1 if auto else 0)
+
     def validate(self):
         from frappe_whatsapp.coexistence import reject_external_mutation
         reject_external_mutation(self)

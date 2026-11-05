@@ -100,6 +100,24 @@ class TestWhatsAppMessage(IntegrationTestCase):
         self.assertTrue(frappe.db.exists("WhatsApp Message", doc.name))
         self.assertEqual(doc.type, "Incoming")
 
+    def test_onload_carries_the_account_read_receipt_switch(self):
+        """The form reads the switch from __onload, never from WhatsApp Account."""
+        doc = frappe.get_doc({
+            "doctype": "WhatsApp Message",
+            "type": "Incoming",
+            "from": "919900112233",
+            "message": "Hola",
+            "message_id": "wamid.test_onload_receipt",
+            "content_type": "text",
+            "whatsapp_account": "Test WA Msg Account",
+        })
+        doc.insert(ignore_permissions=True)
+        for switch in (1, 0):
+            frappe.db.set_value("WhatsApp Account", "Test WA Msg Account", "allow_auto_read_receipt", switch)
+            loaded = frappe.get_doc("WhatsApp Message", doc.name)
+            loaded.run_method("onload")
+            self.assertEqual(loaded.get_onload().get("auto_read_receipt"), switch)
+
     def test_set_whatsapp_account_default(self):
         """Test that whatsapp_account is auto-set to default when not provided."""
         doc = frappe.get_doc({
