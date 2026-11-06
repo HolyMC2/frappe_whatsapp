@@ -212,6 +212,25 @@ class TestWhatsAppMessage(IntegrationTestCase):
         self.assertEqual(sent_data["image"]["link"], "https://example.com/image.jpg")
         self.assertEqual(sent_data["image"]["caption"], "Image caption")
 
+    def test_outgoing_image_without_text_sends_no_caption(self):
+        """A send without text stores the attachment's address as its message;
+        the customer gets the photo alone, not the address."""
+        self.wamid = "wamid.test_image_bare"
+        doc = frappe.get_doc({
+            "doctype": "WhatsApp Message",
+            "type": "Outgoing",
+            "to": "919900112258",
+            "message": "https://example.com/bare.jpg",
+            "message_type": "Manual",
+            "content_type": "image",
+            "attach": "https://example.com/bare.jpg",
+            "whatsapp_account": "Test WA Msg Account",
+        })
+        doc.insert(ignore_permissions=True)
+
+        self.assertEqual(self._sent()["image"], {"link": "https://example.com/bare.jpg"})
+        self.assertEqual(doc.message, "https://example.com/bare.jpg")
+
     def test_outgoing_reaction_message(self):
         """Test sending a reaction message."""
         self.wamid = "wamid.test_reaction_1"

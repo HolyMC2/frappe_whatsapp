@@ -161,21 +161,19 @@ class WhatsAppMessage(Document):
                 # file's upload failure falls back to the old link send. A
                 # private file never becomes a link: its send fails instead.
                 media_id, sent_as = self._upload_local_media()
+                caption = self._caption()
                 if media_id:
                     if sent_as != self.content_type:
                         self.content_type = sent_as
                         data["type"] = sent_as
-                    payload = {"id": media_id, "caption": self.message}
+                    payload = {"id": media_id, **caption}
                     if sent_as == "document" and self.attach:
                         payload["filename"] = self._document_filename()
                     data[sent_as] = payload
                 elif self._private_attach():
                     frappe.throw(_("No se pudo cargar el archivo privado a WhatsApp. Vuelve a intentar el envío; el archivo sigue guardado."))
                 else:
-                    data[self.content_type.lower()] = {
-                        "link": link,
-                        "caption": self.message,
-                    }
+                    data[self.content_type.lower()] = {"link": link, **caption}
             elif self.content_type == "reaction":
                 data["reaction"] = {
                     "message_id": self.reply_to_message_id,
@@ -448,6 +446,15 @@ class WhatsAppMessage(Document):
                 data['template']['components'].extend(button_parameters)
 
         self.notify(data)
+
+    def _caption(self):
+        """The media message's caption, or none. A send without text stores the
+        attachment's own address as its message (CRM composer); that address
+        never reaches the customer."""
+        text = (self.message or "").strip()
+        if not text or text == (self.attach or "").strip():
+            return {}
+        return {"caption": self.message}
 
     def _private_attach(self):
         """A site-private file: it may only reach Meta as an uploaded media id."""
