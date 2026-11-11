@@ -5,7 +5,7 @@ import json
 from unittest.mock import patch, MagicMock
 
 import frappe
-from frappe_whatsapp.testing import IntegrationTestCase
+from frappe_whatsapp.testing import IntegrationTestCase, make_default_account
 
 
 class TestWhatsAppTemplates(IntegrationTestCase):
@@ -40,12 +40,7 @@ class TestWhatsAppTemplates(IntegrationTestCase):
         # Set password within each test's transaction scope
         from frappe.utils.password import set_encrypted_password
         set_encrypted_password("WhatsApp Account", "Test WA Tmpl Account", "test_tmpl_token", "token")
-        # Clear ALL defaults then set ours (db.set_value bypasses on_update hooks)
-        frappe.db.sql("UPDATE `tabWhatsApp Account` SET is_default_outgoing=0, is_default_incoming=0")
-        frappe.db.set_value("WhatsApp Account", "Test WA Tmpl Account", {
-            "is_default_outgoing": 1,
-            "is_default_incoming": 1,
-        })
+        make_default_account("Test WA Tmpl Account")
 
     def tearDown(self):
         # Use SQL-level delete to avoid triggering on_trash (which calls get_settings)

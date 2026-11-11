@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import frappe
 from frappe_whatsapp import transport
-from frappe_whatsapp.testing import IntegrationTestCase
+from frappe_whatsapp.testing import IntegrationTestCase, make_default_account
 from frappe_whatsapp.frappe_whatsapp.tests.test_native_outbox import Response
 
 # Fictional, but numeric like a real Graph phone-number id: the send fence only
@@ -69,12 +69,7 @@ class TestWhatsAppNotification(IntegrationTestCase):
         # Set password within each test's transaction scope
         from frappe.utils.password import set_encrypted_password
         set_encrypted_password("WhatsApp Account", "Test WA Notif Account", "test_notif_token", "token")
-        # Clear ALL defaults then set ours (db.set_value bypasses on_update hooks)
-        frappe.db.sql("UPDATE `tabWhatsApp Account` SET is_default_outgoing=0, is_default_incoming=0")
-        frappe.db.set_value("WhatsApp Account", "Test WA Notif Account", {
-            "is_default_outgoing": 1,
-            "is_default_incoming": 1,
-        })
+        make_default_account("Test WA Notif Account")
         # Message sends leave through the fence's own requests.request
         # (transport._message_api), not make_post_request. Double that physical
         # boundary for every test so nothing can reach Meta.

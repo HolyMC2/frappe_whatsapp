@@ -5,7 +5,7 @@ import json
 from unittest.mock import patch
 
 import frappe
-from frappe_whatsapp.testing import IntegrationTestCase
+from frappe_whatsapp.testing import IntegrationTestCase, make_default_account
 
 from frappe_whatsapp.utils.bulk_messaging import (
     get_progress,
@@ -76,12 +76,7 @@ class TestBulkMessagingUtils(IntegrationTestCase):
         # Set password within each test's transaction scope
         from frappe.utils.password import set_encrypted_password
         set_encrypted_password("WhatsApp Account", "Test WA BulkUtil Account", "test_bulkutil_token", "token")
-        # Clear ALL defaults then set ours (db.set_value bypasses on_update hooks)
-        frappe.db.sql("UPDATE `tabWhatsApp Account` SET is_default_outgoing=0, is_default_incoming=0")
-        frappe.db.set_value("WhatsApp Account", "Test WA BulkUtil Account", {
-            "is_default_outgoing": 1,
-            "is_default_incoming": 1,
-        })
+        make_default_account("Test WA BulkUtil Account")
 
     def tearDown(self):
         for name in frappe.get_all("Bulk WhatsApp Message", filters={"title": ["like", "Test BulkUtil%"]}, pluck="name"):

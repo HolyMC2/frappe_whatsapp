@@ -5,7 +5,7 @@ import json
 from unittest.mock import patch, MagicMock, PropertyMock
 
 import frappe
-from frappe_whatsapp.testing import IntegrationTestCase
+from frappe_whatsapp.testing import IntegrationTestCase, make_default_account
 
 from frappe_whatsapp.utils.webhook import (
     update_message_status,
@@ -197,12 +197,7 @@ class TestWebhookEndpoint(IntegrationTestCase):
         pump = patch("frappe_whatsapp.webhook_receipts.record_events", side_effect=consume)
         pump.start()
         self.addCleanup(pump.stop)
-        # Clear ALL defaults then set ours (db.set_value bypasses on_update hooks)
-        frappe.db.sql("UPDATE `tabWhatsApp Account` SET is_default_outgoing=0, is_default_incoming=0")
-        frappe.db.set_value("WhatsApp Account", "Test WA Webhook EP Account", {
-            "is_default_outgoing": 1,
-            "is_default_incoming": 1,
-        })
+        make_default_account("Test WA Webhook EP Account")
 
     def tearDown(self):
         for name in frappe.get_all("WhatsApp Message", filters={"message_id": ["like", "wamid.webhook_ep_%"]}, pluck="name"):

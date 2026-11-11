@@ -4,7 +4,7 @@
 from unittest.mock import patch, MagicMock
 
 import frappe
-from frappe_whatsapp.testing import IntegrationTestCase
+from frappe_whatsapp.testing import IntegrationTestCase, make_default_account
 
 from frappe_whatsapp.utils import (
     format_number,
@@ -57,14 +57,7 @@ class TestGetWhatsAppAccount(IntegrationTestCase):
             frappe.db.commit()  # nosemgrep: frappe-manual-commit -- test fixture must be visible to later queries
 
     def setUp(self):
-        # Clear ALL defaults then set ours (db.set_value bypasses on_update hooks)
-        frappe.db.sql("UPDATE `tabWhatsApp Account` SET is_default_outgoing=0, is_default_incoming=0")
-        frappe.db.set_value("WhatsApp Account", "Test Utils Account", {
-            "is_default_outgoing": 1,
-            "is_default_incoming": 1,
-        })
-        # WhatsApp Settings is the outgoing-default authority (utils.outgoing_default).
-        frappe.db.set_single_value("WhatsApp Settings", "default_outgoing_account", "Test Utils Account")
+        make_default_account("Test Utils Account")
 
     def test_get_account_by_phone_id(self):
         """Test getting account by phone_id."""
