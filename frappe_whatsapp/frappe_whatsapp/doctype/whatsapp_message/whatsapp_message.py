@@ -196,9 +196,9 @@ class WhatsAppMessage(Document):
                         "type": "list",
                         "body": {"text": self.message},
                         "action": {
-                            "button": "Select Option",
+                            "button": _("Select Option")[:20],
                             "sections": [{
-                                "title": "Options",
+                                "title": _("Options")[:24],
                                 "rows": [
                                     {"id": btn["id"], "title": btn["title"], "description": btn.get("description", "")}
                                     for btn in buttons_data[:10]
