@@ -29,6 +29,27 @@ class TestWebhookReceipts(unittest.TestCase):
         frappe.db.after_commit._functions.clear()
         frappe.db.after_commit._functions.extend(self.commit_functions)
 
+    def test_post_records_again_on_a_fresh_snapshot_after_a_lost_insert_race(self):
+        names = ["fictional-receipt"]
+        with patch.object(signature, "verify_request", return_value=[]), \
+                patch.object(receipts, "record_events",
+                             side_effect=[frappe.QueryDeadlockError("1020"), names]) as record, \
+                patch.object(frappe.db, "rollback") as rollback:
+            self.assertEqual(webhook.post(), names)
+        rollback.assert_called_once_with()
+        self.assertEqual(record.call_count, 2)
+        self.assertEqual(record.call_args_list[0], record.call_args_list[1])
+
+    def test_post_lets_a_second_lost_race_reach_meta_for_its_retry(self):
+        with patch.object(signature, "verify_request", return_value=[]), \
+                patch.object(receipts, "record_events",
+                             side_effect=frappe.QueryDeadlockError("1020")) as record, \
+                patch.object(frappe.db, "rollback") as rollback, \
+                self.assertRaises(frappe.QueryDeadlockError):
+            webhook.post()
+        self.assertEqual(record.call_count, 2)
+        rollback.assert_called_once_with()
+
     def test_duplicate_preserves_earlier_caller_work(self):
         todo = frappe.get_doc({"doctype": "ToDo", "description": "Fictional Meta transaction anchor"}).insert()
         first = receipts.record_events([event()])

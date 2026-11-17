@@ -39,10 +39,23 @@ def get():
 	return Response(hub_challenge, status=200)
 
 def post():
-	"""Authenticate and account-scope the entire batch before any write."""
+	"""Authenticate and account-scope the entire batch before any write.
+
+	Meta can deliver one event in two requests at once. Under snapshot isolation
+	the insert that loses that race fails with 1020 (QueryDeadlockError), not a
+	duplicate key, and its transaction cannot see the winner's row. Recording the
+	batch is this request's only write, so it rolls back and records it once more
+	on a fresh snapshot, where the event is an ordinary duplicate. A second
+	failure propagates and Meta retries the delivery.
+	"""
 	from frappe_whatsapp.webhook_receipts import record_events
 	scopes = signature.verify_request()
-	return record_events([event for scoped in scopes for event in receipt_events(scoped)])
+	events = [event for scoped in scopes for event in receipt_events(scoped)]
+	try:
+		return record_events(events)
+	except frappe.QueryDeadlockError:
+		frappe.db.rollback()
+		return record_events(events)
 
 
 def receipt_events(scoped):
