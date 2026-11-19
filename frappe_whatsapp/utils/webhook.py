@@ -188,6 +188,9 @@ def process_change(scoped):
 	value = scoped.change["value"]
 	messages = value.get("messages", [])
 	whatsapp_account = frappe.get_doc("WhatsApp Account", scoped.accounts[0])
+	from frappe_whatsapp.channel import remember_display_number
+
+	remember_display_number(whatsapp_account, value.get("metadata"))
 	profiles = {c.get("wa_id"): (c.get("profile") or {}).get("name")
 	            for c in value.get("contacts", [])}
 	frappe.get_doc({

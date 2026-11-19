@@ -12,7 +12,8 @@
   "sb_channel",
   "channel_mode",
   "column_break_channel",
-  "shop_whatsapp_number"
+  "shop_whatsapp_number",
+  "print_on_tickets"
  ],
  "fields": [
   {
@@ -54,13 +55,20 @@
    "options": "Phone",
    "label": "Número de WhatsApp del negocio",
    "description": "En modo manual se muestra al personal para que envíe desde el número del negocio y no desde uno personal."
+  },
+  {
+   "fieldname": "print_on_tickets",
+   "fieldtype": "Check",
+   "default": "1",
+   "label": "Print on Tickets",
+   "description": "Print the shop's WhatsApp number on sale and repair tickets: the number above, else the connected account's."
   }
  ],
  "grid_page_length": 50,
  "index_web_pages_for_search": 1,
  "issingle": 1,
  "links": [],
- "modified": "2026-09-29 13:00:00.000000",
+ "modified": "2026-11-19 12:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Whatsapp",
  "name": "WhatsApp Settings",
